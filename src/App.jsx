@@ -2018,6 +2018,7 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [notice, setNotice] = useState('');
   const [uploadingField, setUploadingField] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const selectedService = serviceRecords.find((service) => service.slug === selectedSlug) || serviceRecords[0];
   const [draft, setDraft] = useState(selectedService || null);
 
@@ -2043,15 +2044,31 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
   const updateDraft = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
   const updateDraftImage = (value) => setDraft((current) => ({ ...current, cardImage: value, image: value }));
 
-  const persistRecords = (nextRecords, message) => {
+  const persistRecords = async (nextRecords, message) => {
+    setIsSaving(true);
     try {
-      const savedRecords = saveServiceCmsRecords(nextRecords);
+      const response = await fetch('/api/cms/services', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ records: nextRecords }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        onSessionExpired();
+        throw new Error('Your admin session expired. Please sign in again.');
+      }
+      if (!response.ok || !Array.isArray(result.records)) {
+        throw new Error(result.error || 'The service content could not be saved.');
+      }
+      const savedRecords = saveServiceCmsRecords(result.records);
       setServiceRecords(savedRecords);
       setNotice(message);
       return savedRecords;
-    } catch {
-      setNotice('Browser storage is full. Remove one or more uploaded images, then save again.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'The service content could not be saved.');
       return null;
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -2061,7 +2078,7 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
     setSelectedSlug(nextSlug);
   };
 
-  const addService = () => {
+  const addService = async () => {
     if (hasUnsavedChanges && !window.confirm('Discard your unsaved changes and create a new service?')) return;
     let suffix = 1;
     let slug = 'new-service';
@@ -2085,12 +2102,12 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
       order: serviceRecords.length,
       updatedAt: null,
     };
-    const savedRecords = persistRecords([...serviceRecords, newService], 'New draft created.');
+    const savedRecords = await persistRecords([...serviceRecords, newService], 'New draft created.');
     if (!savedRecords) return;
     setSelectedSlug(slug);
   };
 
-  const saveDraft = (event) => {
+  const saveDraft = async (event) => {
     event.preventDefault();
     if (!draft) return;
 
@@ -2118,30 +2135,30 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
       benefits: draft.benefits.filter((item) => item.trim()).map((item) => item.trim()),
       updatedAt: new Date().toISOString(),
     };
-    const savedRecords = persistRecords(
+    const savedRecords = await persistRecords(
       serviceRecords.map((service) => (service.slug === selectedSlug ? cleanService : service)),
-      `${cleanService.title} saved locally.`,
+      `${cleanService.title} published to the CMS.`,
     );
     if (!savedRecords) return;
     setSelectedSlug(nextSlug);
     setDraft(cleanService);
   };
 
-  const deleteService = () => {
-    if (!selectedService || !window.confirm(`Delete ${selectedService.title}? This removes it from the local CMS.`)) return;
+  const deleteService = async () => {
+    if (!selectedService || !window.confirm(`Delete ${selectedService.title}? This removes it from the CMS.`)) return;
     const remainingServices = serviceRecords.filter((service) => service.slug !== selectedService.slug);
-    const savedRecords = persistRecords(remainingServices, `${selectedService.title} deleted.`);
+    const savedRecords = await persistRecords(remainingServices, `${selectedService.title} deleted.`);
     if (!savedRecords) return;
     setSelectedSlug(savedRecords[0]?.slug || '');
   };
 
-  const moveService = (direction) => {
+  const moveService = async (direction) => {
     const currentIndex = serviceRecords.findIndex((service) => service.slug === selectedSlug);
     const targetIndex = currentIndex + direction;
     if (currentIndex < 0 || targetIndex < 0 || targetIndex >= serviceRecords.length) return;
     const nextRecords = [...serviceRecords];
     [nextRecords[currentIndex], nextRecords[targetIndex]] = [nextRecords[targetIndex], nextRecords[currentIndex]];
-    persistRecords(nextRecords, 'Service order updated.');
+    await persistRecords(nextRecords, 'Service order updated.');
   };
 
   const uploadImage = async (event) => {
@@ -2171,7 +2188,7 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
         image: result.url,
         updatedAt: new Date().toISOString(),
       };
-      const savedRecords = persistRecords(
+      const savedRecords = await persistRecords(
         serviceRecords.map((service) => (service.slug === selectedSlug ? nextService : service)),
         'Image uploaded and saved.',
       );
@@ -2201,8 +2218,8 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
           </a>
         </nav>
         <div className="admin-sidebar-footer">
-          <span>Local workspace</span>
-          <p>Content is stored in this browser. Uploaded images are saved inside this local project.</p>
+          <span>Cloud workspace</span>
+          <p>Service content and uploaded images are stored securely in Cloudflare KV.</p>
         </div>
       </aside>
 
@@ -2215,7 +2232,7 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
           <div className="admin-topbar-actions">
             <a className="admin-button admin-button-secondary" href="/services" target="_blank" rel="noreferrer">Preview website</a>
             <button className="admin-button admin-button-secondary" type="button" onClick={onSignOut}>Sign out</button>
-            <button className="admin-button admin-button-primary" type="button" onClick={addService}>Add service</button>
+            <button className="admin-button admin-button-primary" type="button" onClick={addService} disabled={isSaving}>Add service</button>
           </div>
         </header>
 
@@ -2223,7 +2240,7 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
           <div><strong>{serviceRecords.length}</strong><span>Total services</span></div>
           <div><strong>{publishedCount}</strong><span>Published</span></div>
           <div><strong>{draftCount}</strong><span>Drafts</span></div>
-          <div><strong>Local</strong><span>Storage mode</span></div>
+          <div><strong>KV</strong><span>Storage mode</span></div>
         </div>
 
         <div className="admin-content-grid">
@@ -2286,8 +2303,8 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
                     <p>{hasUnsavedChanges ? 'You have unsaved changes.' : 'All local changes are saved.'}</p>
                   </div>
                   <div className="admin-order-actions" aria-label="Reorder service">
-                    <button type="button" onClick={() => moveService(-1)} disabled={serviceRecords[0]?.slug === selectedSlug}>Move up</button>
-                    <button type="button" onClick={() => moveService(1)} disabled={serviceRecords.at(-1)?.slug === selectedSlug}>Move down</button>
+                    <button type="button" onClick={() => moveService(-1)} disabled={isSaving || serviceRecords[0]?.slug === selectedSlug}>Move up</button>
+                    <button type="button" onClick={() => moveService(1)} disabled={isSaving || serviceRecords.at(-1)?.slug === selectedSlug}>Move down</button>
                   </div>
                 </div>
 
@@ -2329,10 +2346,10 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
                 </div>
 
                 <div className="admin-editor-footer">
-                  <button className="admin-delete-button" type="button" onClick={deleteService}>Delete service</button>
+                  <button className="admin-delete-button" type="button" onClick={deleteService} disabled={isSaving}>Delete service</button>
                   <div>
                     <a className="admin-button admin-button-secondary" href={`/services/${draft.slug}`} target="_blank" rel="noreferrer">Open page</a>
-                    <button className="admin-button admin-button-primary" type="submit" disabled={!hasUnsavedChanges}>Save changes</button>
+                    <button className="admin-button admin-button-primary" type="submit" disabled={isSaving || !hasUnsavedChanges}>{isSaving ? 'Saving…' : 'Save changes'}</button>
                   </div>
                 </div>
               </form>
