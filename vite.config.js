@@ -340,6 +340,7 @@ function cmsImageUploadPlugin(env) {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
+    cacheDir: '.vite-cache',
     plugins: [applicationApiPlugin(env), adminAuthPlugin(env), cmsImageUploadPlugin(env), react()],
   };
 });
