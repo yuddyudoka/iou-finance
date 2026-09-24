@@ -11,10 +11,10 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*", "/cms-images/*"]
   },
-  "r2_buckets": [
+  "kv_namespaces": [
     {
-      "binding": "CMS_BUCKET",
-      "bucket_name": "iou-finance-cms"
+      "binding": "CMS_KV",
+      "id": "492a1f0c4bbb4849b7131c5744a69289"
     }
   ],
   "observability": {
