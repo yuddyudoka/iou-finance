@@ -1,6 +1,8 @@
 const ADMIN_COOKIE = 'iou_admin_session';
 const SESSION_DURATION_SECONDS = 8 * 60 * 60;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_CMS_BYTES = 1024 * 1024;
+const SERVICES_KEY = 'cms:services';
 const REQUIRED_APPLICATION_FIELDS = [
   'firstName', 'lastName', 'phone', 'email', 'employer',
   'monthlyIncome', 'amountNeeded', 'duration', 'bvn', 'nin',
@@ -214,7 +216,7 @@ async function handleImageUpload(request, env) {
     return json({ error: 'Your admin session has expired. Please sign in again.' }, 401);
   }
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
-  if (!env.CMS_BUCKET) return json({ error: 'CMS image storage is not configured.' }, 503);
+  if (!env.CMS_KV) return json({ error: 'CMS storage is not configured.' }, 503);
 
   const contentLength = Number(request.headers.get('Content-Length') || 0);
   if (contentLength > 6 * 1024 * 1024) return json({ error: 'The image must be 5MB or smaller.' }, 413);
@@ -229,8 +231,8 @@ async function handleImageUpload(request, env) {
     }
 
     const key = `${Date.now()}-${crypto.randomUUID()}.${extension}`;
-    await env.CMS_BUCKET.put(key, image.stream(), {
-      httpMetadata: { contentType: image.type, cacheControl: 'public, max-age=31536000, immutable' },
+    await env.CMS_KV.put(`image:${key}`, await image.arrayBuffer(), {
+      metadata: { contentType: image.type },
     });
     return json({ url: `/cms-images/${key}` }, 201);
   } catch (error) {
@@ -240,17 +242,64 @@ async function handleImageUpload(request, env) {
 }
 
 async function serveCmsImage(env, path) {
-  if (!env.CMS_BUCKET) return new Response('Not found', { status: 404 });
+  if (!env.CMS_KV) return new Response('Not found', { status: 404 });
   const key = decodeURIComponent(path.slice('/cms-images/'.length));
   if (!key || key.includes('..')) return new Response('Not found', { status: 404 });
-  const object = await env.CMS_BUCKET.get(key);
-  if (!object) return new Response('Not found', { status: 404 });
+  const object = await env.CMS_KV.getWithMetadata(`image:${key}`, 'arrayBuffer');
+  if (!object.value) return new Response('Not found', { status: 404 });
 
-  const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set('ETag', object.httpEtag);
-  headers.set('X-Content-Type-Options', 'nosniff');
-  return new Response(object.body, { headers });
+  return new Response(object.value, {
+    headers: {
+      'Content-Type': object.metadata?.contentType || 'application/octet-stream',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
+function normaliseCmsRecords(records) {
+  if (!Array.isArray(records)) return null;
+  return records
+    .filter((service) => service && typeof service.slug === 'string' && typeof service.title === 'string')
+    .map((service, index) => ({
+      ...service,
+      slug: service.slug.slice(0, 100),
+      title: service.title.slice(0, 200),
+      cardImage: service.cardImage || service.image || null,
+      image: service.cardImage || service.image || null,
+      order: index,
+    }));
+}
+
+async function handleServicesCms(request, env) {
+  if (!env.CMS_KV) return json({ error: 'CMS storage is not configured.' }, 503);
+
+  if (request.method === 'GET') {
+    const records = await env.CMS_KV.get(SERVICES_KEY, 'json');
+    return json({ records: Array.isArray(records) ? records : null });
+  }
+
+  if (request.method !== 'PUT') return json({ error: 'Method not allowed.' }, 405);
+  const sessionSecret = String(env.ADMIN_SESSION_SECRET || env.ADMIN_PASSWORD || '');
+  if (!await hasValidSession(request, sessionSecret)) {
+    return json({ error: 'Your admin session has expired. Please sign in again.' }, 401);
+  }
+
+  const contentLength = Number(request.headers.get('Content-Length') || 0);
+  if (contentLength > MAX_CMS_BYTES) return json({ error: 'The CMS content is too large.' }, 413);
+
+  try {
+    const body = await request.json();
+    const records = normaliseCmsRecords(body.records);
+    if (!records) return json({ error: 'The service content is invalid.' }, 400);
+    const serialised = JSON.stringify(records);
+    if (serialised.length > MAX_CMS_BYTES) return json({ error: 'The CMS content is too large.' }, 413);
+    await env.CMS_KV.put(SERVICES_KEY, serialised);
+    return json({ records });
+  } catch (error) {
+    console.error('CMS content save failed:', error);
+    return json({ error: 'The service content could not be saved. Please try again.' }, 500);
+  }
 }
 
 export default {
@@ -258,6 +307,7 @@ export default {
     const path = new URL(request.url).pathname;
     if (path.startsWith('/api/admin/')) return handleAdmin(request, env, path);
     if (path === '/api/applications') return handleApplication(request, env);
+    if (path === '/api/cms/services') return handleServicesCms(request, env);
     if (path === '/api/cms/images') return handleImageUpload(request, env);
     if (path.startsWith('/cms-images/')) return serveCmsImage(env, path);
     return env.ASSETS.fetch(request);
