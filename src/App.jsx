@@ -534,6 +534,11 @@ const loanCurrencyFormatter = new Intl.NumberFormat('en-NG', {
   maximumFractionDigits: 0,
 });
 
+const formatMoneyInput = (value) => {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits ? Number(digits).toLocaleString('en-NG') : '';
+};
+
 function LoanCalculator() {
   const minAmount = 50000;
   const maxAmount = 5000000;
@@ -614,12 +619,13 @@ function LoanCalculator() {
                   <span aria-hidden="true">₦</span>
                   <input
                     id="loan-amount"
-                    type="number"
-                    min={minAmount}
-                    max={maxAmount}
-                    step="50000"
-                    value={amount}
-                    onChange={(event) => setAmount(event.target.value === '' ? '' : Number(event.target.value))}
+                    type="text"
+                    inputMode="numeric"
+                    value={formatMoneyInput(amount)}
+                    onChange={(event) => {
+                      const digits = event.target.value.replace(/\D/g, '');
+                      setAmount(digits ? Number(digits) : '');
+                    }}
                   />
                 </span>
               </div>
@@ -634,7 +640,7 @@ function LoanCalculator() {
                 aria-label="Loan amount"
                 onChange={(event) => setAmount(Number(event.target.value))}
               />
-              <div className="loan-calculator-limits"><span>₦50k</span><span>₦5M</span></div>
+              <div className="loan-calculator-limits"><span>₦50,000</span><span>₦5,000,000</span></div>
             </div>
 
             <div className="loan-calculator-field">
@@ -699,7 +705,7 @@ function LoanCalculator() {
 function Hero() {
   return (
     <section className="hero" id="home" data-node-id="15:72">
-      <img className="hero-image" src="/assets/hero-businessman.jpg" alt="A business owner smiling while working on a laptop" />
+      <img className="hero-image" src="/assets/hero-home-executive-wide.png" alt="A smiling business professional in a navy suit" />
       <div className="hero-overlay" />
       <div className="hero-content">
         <div className="hero-copy">
@@ -737,7 +743,7 @@ function AboutSection() {
 function ServicesHero() {
   return (
     <section className="services-hero" data-node-id="100:479">
-      <img className="services-hero-image services-page-hero-image" src="/assets/services-page-hero-businessman.jpg" alt="A business professional standing outdoors" />
+      <img className="services-hero-image services-page-hero-image" src="/assets/about-hero-executive-office.png" alt="A smiling business professional seated at his office desk" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content">
         <p>~SERVICES~</p>
@@ -750,7 +756,7 @@ function ServicesHero() {
 function FaqHero() {
   return (
     <section className="services-hero" data-node-id="107:746">
-      <img className="services-hero-image faq-hero-image" src="/assets/faq-hero-businessman.jpg" alt="A business owner reviewing cash at his desk" />
+      <img className="services-hero-image faq-hero-image" src="/assets/faq-hero-advisor-office.png" alt="A financial advisor seated at her desk ready to answer questions" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content">
         <p>~FAQs~</p>
@@ -784,7 +790,7 @@ function FaqSection() {
 function AboutPageHero() {
   return (
     <section className="services-hero about-page-hero" data-node-id="142:1955">
-      <img className="services-hero-image about-hero-image" src="/assets/about-hero-businessman.jpg" alt="A business professional standing in a modern atrium" />
+      <img className="services-hero-image about-hero-image" src="/assets/about-hero-woman-office.png" alt="A confident business professional standing in a modern office" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content about-hero-content">
         <p>~About Us~</p>
@@ -797,7 +803,7 @@ function AboutPageHero() {
 function ContactPageHero() {
   return (
     <section className="services-hero contact-page-hero">
-      <img className="services-hero-image contact-hero-image" src="/assets/contact-hero-businessman.jpg" alt="A business owner speaking on the phone beside his laptop" />
+      <img className="services-hero-image contact-hero-image" src="/assets/contact-hero-women-meeting.png" alt="A business leader speaking with colleagues in a bright meeting room" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content contact-hero-content">
         <p>~Contact Us~</p>
@@ -810,7 +816,7 @@ function ContactPageHero() {
 function ApplicationPageHero() {
   return (
     <section className="services-hero application-page-hero">
-      <img className="services-hero-image application-hero-image" src="/assets/application-hero-businessman.jpg" alt="A business professional working across a laptop and phone" />
+      <img className="services-hero-image application-hero-image" src="/assets/contact-hero-team-meeting.png" alt="A group of business professionals discussing growth and funding" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content contact-hero-content application-hero-content">
         <p>~Application~</p>
@@ -980,6 +986,8 @@ function ContactSection() {
 function ApplicationFormSection() {
   const [fileName, setFileName] = useState('');
   const [fileError, setFileError] = useState('');
+  const [utilityBillFileName, setUtilityBillFileName] = useState('');
+  const [utilityBillError, setUtilityBillError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormComplete, setIsFormComplete] = useState(false);
   const [submitStatus, setSubmitStatus] = useState('');
@@ -1010,6 +1018,7 @@ function ApplicationFormSection() {
       setSubmitStatus(result.message || 'Your application has been submitted successfully.');
       form.reset();
       setFileName('');
+      setUtilityBillFileName('');
       setIsFormComplete(false);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'We could not submit your application right now.');
@@ -1020,6 +1029,10 @@ function ApplicationFormSection() {
 
   const handleFormValidity = (event) => {
     setIsFormComplete(event.currentTarget.checkValidity());
+  };
+
+  const handleMoneyInput = (event) => {
+    event.currentTarget.value = formatMoneyInput(event.currentTarget.value);
   };
 
   const handleFileChange = (event) => {
@@ -1033,6 +1046,20 @@ function ApplicationFormSection() {
 
     setFileName(file?.name || '');
     setFileError('');
+  };
+
+  const handleUtilityBillChange = (event) => {
+    const file = event.target.files?.[0];
+    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+    if (file && (!allowedTypes.includes(file.type) || file.size > 5 * 1024 * 1024)) {
+      event.target.value = '';
+      setUtilityBillFileName('');
+      setUtilityBillError('Please choose a PDF, JPG or PNG smaller than 5MB.');
+      return;
+    }
+
+    setUtilityBillFileName(file?.name || '');
+    setUtilityBillError('');
   };
 
   return (
@@ -1067,20 +1094,31 @@ function ApplicationFormSection() {
           </label>
           <label className="application-field">
             <span>Monthly income (₦) <b aria-hidden="true">*</b></span>
-            <input name="monthlyIncome" inputMode="numeric" required />
+            <input name="monthlyIncome" inputMode="numeric" onInput={handleMoneyInput} required />
           </label>
         </div>
 
         <div className="application-form-row">
           <label className="application-field">
             <span>Amount needed (₦) <b aria-hidden="true">*</b></span>
-            <input name="amountNeeded" type="number" inputMode="numeric" min="50000" max="5000000" step="50000" defaultValue={prefilledAmount} required />
+            <input name="amountNeeded" inputMode="numeric" defaultValue={formatMoneyInput(prefilledAmount)} onInput={handleMoneyInput} required />
           </label>
           <label className="application-field">
             <span>Duration (months) <b aria-hidden="true">*</b></span>
             <input name="duration" type="number" inputMode="numeric" min="1" max="12" defaultValue={prefilledDuration} required />
           </label>
         </div>
+
+        <label className="application-field application-address-field">
+          <span>Home Address <b aria-hidden="true">*</b></span>
+          <textarea
+            name="homeAddress"
+            autoComplete="street-address"
+            placeholder="Enter your full residential address"
+            rows="3"
+            required
+          />
+        </label>
 
         <div className="application-form-row application-identification-row">
           <label className="application-field">
@@ -1113,13 +1151,33 @@ function ApplicationFormSection() {
           {fileError && <span className="application-upload-error" id="passport-upload-error" role="alert">{fileError}</span>}
         </label>
 
+        <label className="application-upload-field">
+          <span className="application-upload-label">Utility Bill <b aria-hidden="true">*</b></span>
+          <span className="application-upload-box">
+            <input
+              name="utilityBill"
+              type="file"
+              accept="application/pdf,image/jpeg,image/png"
+              aria-describedby="utility-bill-upload-help utility-bill-upload-error"
+              required
+              onChange={handleUtilityBillChange}
+            />
+            <img src="/assets/application-upload.svg" alt="" />
+            <span className="application-upload-copy">
+              <strong>{utilityBillFileName || 'Click to upload a recent utility bill'}</strong>
+              <small id="utility-bill-upload-help"><span>PDF, JPG or PNG</span><i /><span>proof of home address</span><i /><span>Max 5MB</span></small>
+            </span>
+          </span>
+          {utilityBillError && <span className="application-upload-error" id="utility-bill-upload-error" role="alert">{utilityBillError}</span>}
+        </label>
+
         <p className="application-consent">
           By clicking this button, you confirm that you have read and agree to our{' '}
           <a href="/terms-and-conditions">Terms &amp; Conditions</a> and{' '}
           <a href="/privacy-policy">Privacy Policy</a>
         </p>
 
-        <button className="button button-primary application-submit" type="submit" disabled={isSubmitting || !isFormComplete || Boolean(fileError)}>
+        <button className="button button-primary application-submit" type="submit" disabled={isSubmitting || !isFormComplete || Boolean(fileError) || Boolean(utilityBillError)}>
           {isSubmitting ? 'Submitting…' : 'Apply for a Loan'}
         </button>
         {submitStatus && (

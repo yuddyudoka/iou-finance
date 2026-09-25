@@ -5,7 +5,7 @@ const MAX_CMS_BYTES = 1024 * 1024;
 const SERVICES_KEY = 'cms:services';
 const REQUIRED_APPLICATION_FIELDS = [
   'firstName', 'lastName', 'phone', 'email', 'employer',
-  'monthlyIncome', 'amountNeeded', 'duration', 'bvn', 'nin',
+  'monthlyIncome', 'amountNeeded', 'duration', 'homeAddress', 'bvn', 'nin',
 ];
 const loginAttempts = new Map();
 
@@ -121,14 +121,19 @@ async function handleAdmin(request, env, path) {
 }
 
 function applicationEmailHtml(values) {
+  const formatMoneyValue = (value) => {
+    const amount = Number(String(value ?? '').replace(/,/g, ''));
+    return Number.isFinite(amount) ? amount.toLocaleString('en-NG') : String(value ?? '');
+  };
   const rows = [
     ['Name', `${values.firstName} ${values.lastName}`],
     ['Phone number', values.phone],
     ['Email address', values.email],
     ['Business/Employer', values.employer],
-    ['Monthly income', `₦${values.monthlyIncome}`],
-    ['Amount needed', `₦${values.amountNeeded}`],
+    ['Monthly income', `₦${formatMoneyValue(values.monthlyIncome)}`],
+    ['Amount needed', `₦${formatMoneyValue(values.amountNeeded)}`],
     ['Duration', `${values.duration} months`],
+    ['Home address', values.homeAddress],
     ['BVN', values.bvn],
     ['NIN', values.nin],
   ];
@@ -140,7 +145,7 @@ function applicationEmailHtml(values) {
         <td style="border:1px solid #ddd;padding:10px">${escapeHtml(value)}</td>
       </tr>`).join('')}
     </table>
-    <p>The applicant's passport photograph is attached.</p>
+    <p>The applicant's passport photograph and utility bill are attached.</p>
   </div>`;
 }
 
@@ -161,7 +166,7 @@ async function handleApplication(request, env) {
   }
 
   const contentLength = Number(request.headers.get('Content-Length') || 0);
-  if (contentLength > 7 * 1024 * 1024) return json({ error: 'The application is too large.' }, 413);
+  if (contentLength > 12 * 1024 * 1024) return json({ error: 'The application is too large.' }, 413);
 
   try {
     const formData = await request.formData();
@@ -169,9 +174,10 @@ async function handleApplication(request, env) {
       REQUIRED_APPLICATION_FIELDS.map((field) => [field, String(formData.get(field) || '').trim()]),
     );
     const passport = formData.get('passportPhotograph');
+    const utilityBill = formData.get('utilityBill');
     const missingField = REQUIRED_APPLICATION_FIELDS.find((field) => !values[field]);
-    if (missingField || !(passport instanceof File) || !passport.size) {
-      return json({ error: 'Please complete every field and attach a passport photograph.' }, 400);
+    if (missingField || !(passport instanceof File) || !passport.size || !(utilityBill instanceof File) || !utilityBill.size) {
+      return json({ error: 'Please complete every field and attach a passport photograph and utility bill.' }, 400);
     }
     if (!/^\S+@\S+\.\S+$/.test(values.email)) return json({ error: 'Please enter a valid email address.' }, 400);
     if (!/^\d{11}$/.test(values.bvn) || !/^\d{11}$/.test(values.nin)) {
@@ -179,6 +185,9 @@ async function handleApplication(request, env) {
     }
     if (!['image/jpeg', 'image/png'].includes(passport.type) || passport.size > MAX_IMAGE_BYTES) {
       return json({ error: 'The passport photograph must be a JPG or PNG smaller than 5MB.' }, 400);
+    }
+    if (!['application/pdf', 'image/jpeg', 'image/png'].includes(utilityBill.type) || utilityBill.size > MAX_IMAGE_BYTES) {
+      return json({ error: 'The utility bill must be a PDF, JPG or PNG smaller than 5MB.' }, 400);
     }
 
     const resendResponse = await fetch('https://api.resend.com/emails', {
@@ -193,10 +202,16 @@ async function handleApplication(request, env) {
         reply_to: values.email,
         subject: `Loan application — ${values.firstName} ${values.lastName}`,
         html: applicationEmailHtml(values),
-        attachments: [{
-          filename: passport.name || 'passport-photograph.jpg',
-          content: arrayBufferToBase64(await passport.arrayBuffer()),
-        }],
+        attachments: [
+          {
+            filename: passport.name || 'passport-photograph.jpg',
+            content: arrayBufferToBase64(await passport.arrayBuffer()),
+          },
+          {
+            filename: utilityBill.name || 'utility-bill.pdf',
+            content: arrayBufferToBase64(await utilityBill.arrayBuffer()),
+          },
+        ],
       }),
     });
     if (!resendResponse.ok) {

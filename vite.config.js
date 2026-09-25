@@ -14,6 +14,7 @@ const requiredFields = [
   'monthlyIncome',
   'amountNeeded',
   'duration',
+  'homeAddress',
   'bvn',
   'nin',
 ];
@@ -168,14 +169,19 @@ function adminAuthPlugin(env) {
 }
 
 function applicationEmailHtml(values) {
+  const formatMoneyValue = (value) => {
+    const amount = Number(String(value ?? '').replace(/,/g, ''));
+    return Number.isFinite(amount) ? amount.toLocaleString('en-NG') : String(value ?? '');
+  };
   const rows = [
     ['Name', `${values.firstName} ${values.lastName}`],
     ['Phone number', values.phone],
     ['Email address', values.email],
     ['Business/Employer', values.employer],
-    ['Monthly income', `₦${values.monthlyIncome}`],
-    ['Amount needed', `₦${values.amountNeeded}`],
+    ['Monthly income', `₦${formatMoneyValue(values.monthlyIncome)}`],
+    ['Amount needed', `₦${formatMoneyValue(values.amountNeeded)}`],
     ['Duration', `${values.duration} months`],
+    ['Home address', values.homeAddress],
     ['BVN', values.bvn],
     ['NIN', values.nin],
   ];
@@ -190,7 +196,7 @@ function applicationEmailHtml(values) {
             <td style="border:1px solid #ddd;padding:10px">${escapeHtml(value)}</td>
           </tr>`).join('')}
       </table>
-      <p>The applicant's passport photograph is attached.</p>
+      <p>The applicant's passport photograph and utility bill are attached.</p>
     </div>`;
 }
 
@@ -207,7 +213,7 @@ function applicationApiPlugin(env) {
     }
 
     const contentLength = Number(request.headers['content-length'] || 0);
-    if (contentLength > 7 * 1024 * 1024) {
+    if (contentLength > 12 * 1024 * 1024) {
       return sendJson(response, 413, { error: 'The application is too large.' });
     }
 
@@ -222,9 +228,10 @@ function applicationApiPlugin(env) {
       const values = Object.fromEntries(requiredFields.map((field) => [field, String(formData.get(field) || '').trim()]));
       const missingField = requiredFields.find((field) => !values[field]);
       const passport = formData.get('passportPhotograph');
+      const utilityBill = formData.get('utilityBill');
 
-      if (missingField || !(passport instanceof File) || !passport.size) {
-        return sendJson(response, 400, { error: 'Please complete every field and attach a passport photograph.' });
+      if (missingField || !(passport instanceof File) || !passport.size || !(utilityBill instanceof File) || !utilityBill.size) {
+        return sendJson(response, 400, { error: 'Please complete every field and attach a passport photograph and utility bill.' });
       }
       if (!/^\S+@\S+\.\S+$/.test(values.email)) {
         return sendJson(response, 400, { error: 'Please enter a valid email address.' });
@@ -235,8 +242,12 @@ function applicationApiPlugin(env) {
       if (!['image/jpeg', 'image/png'].includes(passport.type) || passport.size > 5 * 1024 * 1024) {
         return sendJson(response, 400, { error: 'The passport photograph must be a JPG or PNG smaller than 5MB.' });
       }
+      if (!['application/pdf', 'image/jpeg', 'image/png'].includes(utilityBill.type) || utilityBill.size > 5 * 1024 * 1024) {
+        return sendJson(response, 400, { error: 'The utility bill must be a PDF, JPG or PNG smaller than 5MB.' });
+      }
 
       const passportContent = Buffer.from(await passport.arrayBuffer()).toString('base64');
+      const utilityBillContent = Buffer.from(await utilityBill.arrayBuffer()).toString('base64');
       const resendResponse = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -249,7 +260,10 @@ function applicationApiPlugin(env) {
           reply_to: values.email,
           subject: `Loan application — ${values.firstName} ${values.lastName}`,
           html: applicationEmailHtml(values),
-          attachments: [{ filename: passport.name || 'passport-photograph.jpg', content: passportContent }],
+          attachments: [
+            { filename: passport.name || 'passport-photograph.jpg', content: passportContent },
+            { filename: utilityBill.name || 'utility-bill.pdf', content: utilityBillContent },
+          ],
         }),
       });
 

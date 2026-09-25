@@ -2,9 +2,9 @@
 name: IOU Finance Admin
 description: A restrained, brand-led operating system for managing IOU Finance service content.
 colors:
-  brand-red: "#990000"
-  brand-red-hover: "#7f0000"
-  brand-red-bright: "#d22d2d"
+  brand-red: "#4c0707"
+  brand-red-hover: "#360505"
+  brand-red-bright: "#6a1010"
   canvas-warm: "#f5f3f1"
   surface: "#ffffff"
   surface-subtle: "#faf9f8"
