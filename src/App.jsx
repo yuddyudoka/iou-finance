@@ -11,11 +11,11 @@ const navItems = [
 const faqItems = [
   {
     question: 'What is IOU Finance?',
-    answer: 'IOU Finance is a lending platform built for market women, traders, small business owners, and salary earners across Nigeria. We provide fast, collateral-free loans so you can handle emergencies, grow your business, or bridge the gap till payday.',
+    answer: 'IOU Finance is a lending platform built for employees, traders, and business owners across Nigeria. We provide fast, collateral-free loans so you can handle emergencies, bridge the gap till payday, or grow your business.',
   },
   {
     question: 'Who can apply for a loan?',
-    answer: "Anyone earning a legitimate income, whether you trade in the market, run a small business, or work a salaried job, can apply. As long as you meet our basic requirements, you're eligible.",
+    answer: "Anyone earning a legitimate income can apply, whether you're an employee, a trader, or a business owner. As long as you meet our basic requirements, you're eligible.",
   },
   {
     question: 'Do I need collateral to get a loan?',
@@ -115,7 +115,7 @@ const benefits = [
     description: "No hidden charges or surprise deductions. We tell you exactly what you owe and when, before you sign anything — so there's never a nasty surprise.",
     image: '/assets/benefit-transparent-terms.jpg',
     imageAlt: 'A financial adviser explaining repayment details',
-    imagePosition: '50% 36%',
+    imagePosition: '50% 8%',
   },
 ];
 
@@ -162,31 +162,43 @@ const testimonials = [
     quote: '“IOU Finance saved my shop during a slow season. I applied, got approved, and restocked within a day”',
     name: 'Chijioke Okafor',
     role: 'Fabric Trader, Balogun Market',
+    image: '/assets/testimonial-chijioke.webp',
+    imageAlt: 'Portrait of Chijioke Okafor',
   },
   {
-    quote: '"As market woman, e no easy to get loan. But IOU Finance no stress me at all."',
+    quote: '"Running my provision store no easy, but IOU Finance made getting a loan simple and stress-free."',
     name: 'Adaobi Nwosu',
     role: 'Provision Store Owner, Lagos',
+    image: '/assets/testimonial-adaobi.webp',
+    imageAlt: 'Portrait of Adaobi Nwosu',
   },
   {
     quote: '"I applied for a payday loan and had the money before my next alert even dropped."',
     name: 'Emeka Ibe',
-    role: 'Market Woman, Mile 12',
+    role: 'Employee, Lagos',
+    image: '/assets/testimonial-emeka.webp',
+    imageAlt: 'Portrait of Emeka Ibe',
   },
   {
     quote: '"My business grew because IOU Finance believed in me when nobody else would give me a chance."',
     name: 'Ify Uche',
     role: 'Small Business Owner',
+    image: '/assets/testimonial-ify.webp',
+    imageAlt: 'Portrait of Ify Uche',
   },
   {
     quote: '"Fast approval, clear terms, no hidden charges. This is the lender every trader has been searching for."',
     name: 'Tunde Adebayo',
     role: 'Salary Earner',
+    image: '/assets/testimonial-tunde.webp',
+    imageAlt: 'Portrait of Tunde Adebayo',
   },
   {
     quote: '"I no get collateral, but IOU Finance still help me. Money enter my account same day sharp."',
     name: 'Ngozi Eze',
     role: 'Civil Servant, Abuja',
+    image: '/assets/testimonial-ngozi.webp',
+    imageAlt: 'Portrait of Ngozi Eze',
   },
 ];
 
@@ -710,7 +722,7 @@ function Hero() {
       <div className="hero-content">
         <div className="hero-copy">
           <h1>Quick Loans? No Wahala, Get Cash in Your Hands Today.</h1>
-          <p>From restocking your shop to funding your next big order, we lend money that moves with your hustle.</p>
+          <p>From handling urgent expenses before payday to restocking your shop or funding your next big order, we lend money that moves with how you earn.</p>
         </div>
         <div className="hero-actions">
           <a className="button button-primary" href="/application">Apply for a Loan</a>
@@ -728,11 +740,11 @@ function AboutSection() {
       <div className="about-content">
         <div className="about-heading" data-node-id="30:6">
           <p className="section-label">ABOUT US</p>
-          <h2>At IOU Finance, we give market women, traders and small business owners fast access to the cash they need — no collateral, no long queues, no wahala.</h2>
+          <h2>At IOU Finance, we give employees, traders, and business owners fast access to the cash they need — no collateral, no long queues, no wahala.</h2>
         </div>
 
         <div className="about-summary" data-node-id="30:9">
-          <p>Built for everyday hustlers. We understand how Nigerian businesses really run, so we lend money that moves as fast as your business does.</p>
+          <p>Built for hardworking Nigerians. We understand the realities of salaries, daily trade, and growing a business, so our loans move as quickly as your needs do.</p>
           <a className="button button-primary" href="/about">Learn More</a>
         </div>
       </div>
@@ -747,7 +759,7 @@ function ServicesHero() {
       <div className="services-hero-overlay" />
       <div className="services-hero-content">
         <p>~SERVICES~</p>
-        <h1>Loans Built Around Your Hustle</h1>
+        <h1>Loans Built Around How You Earn</h1>
       </div>
     </section>
   );
@@ -830,7 +842,7 @@ function AboutStatementSection() {
   return (
     <section className="about-statement-section" data-node-id="142:1959">
       <p>
-        At IOU Finance, We are committed to putting fast, honest funding in the hands of market women, traders, and small business owners across Nigeria. Our team understands the unique challenges hustlers and everyday earners face, offering simple loan options built around how you actually work and earn.
+        At IOU Finance, we are committed to putting fast, honest funding in the hands of employees, traders, and business owners across Nigeria. Our team understands the pressures of earning a salary, running a trade, and growing a business, so we offer simple loan options built around how you actually work and earn.
       </p>
     </section>
   );
@@ -850,7 +862,7 @@ function AboutMissionSection() {
         <div className="about-mission-copy">
           <div className="about-mission-intro">
             <p className="about-mission-label">OUR MISSION</p>
-            <h2>Turning Everyday Hustles Into Lasting Growth</h2>
+            <h2>Turning Everyday Work Into Lasting Growth</h2>
             <p>We exist to make credit accessible to every hardworking Nigerian, regardless of collateral, connections, or paperwork. Our vision is a Nigeria where no one&apos;s growth is limited by lack of access to capital.</p>
           </div>
 
@@ -863,7 +875,7 @@ function AboutMissionSection() {
             <article>
               <span className="about-point-icon"><img src="/assets/about-growth.svg" alt="" /></span>
               <h3>Empower Growth</h3>
-              <p>We fund the traders, sellers and business owners building Nigeria&apos;s economy from the ground up, one loan at a time</p>
+              <p>We help employees stay financially steady and give traders and business owners the capital to keep moving forward, one loan at a time.</p>
             </article>
           </div>
         </div>
@@ -1506,7 +1518,7 @@ function ProcessSection() {
         <div className="eligibility-content">
           <div className="eligibility-intro">
             <h2>WHO CAN APPLY?</h2>
-            <p>Whether you sell in the market, run a small shop, or earn a fixed salary, IOU Finance is built for you. We keep the process simple and the requirements few, so getting funded doesn't feel like a battle.</p>
+            <p>Whether you earn a salary, trade for a living, or run a business, IOU Finance is built for you. We keep the process simple and the requirements few, so getting funded doesn&apos;t feel like a battle.</p>
           </div>
 
           <div className="documents-block">
@@ -1530,7 +1542,7 @@ function ProcessSection() {
         <ProcessImage
           src="/assets/process-eligibility.jpg"
           alt="A small business owner who is eligible to apply"
-          position="48% 40%"
+          position="48% 15%"
         />
       </div>
     </section>
@@ -1622,7 +1634,7 @@ function TestimonialsSection() {
                 <blockquote>{testimonial.quote}</blockquote>
 
                 <div className="testimonial-author">
-                  <img className="testimonial-avatar" src="/assets/testimonial-avatar.png" alt="" />
+                  <img className="testimonial-avatar" src={testimonial.image} alt={testimonial.imageAlt} />
                   <div>
                     <cite>{testimonial.name}</cite>
                     <span>{testimonial.role}</span>
@@ -1698,7 +1710,7 @@ function Footer() {
             <a className="footer-brand" href="/#home" aria-label="IOU Finance home">
               <img src="/assets/footer-logo.png" alt="IOU Finance Ltd." />
             </a>
-            <p>IOU Finance gives market women, traders and business owners fast access to loans, no collateral, no long wait. Spend. Save. Earn.</p>
+            <p>IOU Finance gives employees, traders, and business owners fast access to loans — no collateral, no long wait. Spend. Save. Earn.</p>
           </div>
 
           <img className="footer-divider" src="/assets/footer-divider.svg" alt="" />
@@ -1877,6 +1889,39 @@ function ApplicationPage() {
         <NavBar />
       </div>
       <ApplicationFormSection />
+      <Footer />
+    </main>
+  );
+}
+
+function NotFoundPage() {
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = 'Page Not Found | IOU Finance';
+    return () => { document.title = previousTitle; };
+  }, []);
+
+  return (
+    <main className="not-found-page">
+      <NavBar />
+      <section className="not-found-section" aria-labelledby="not-found-title">
+        <div className="not-found-layout">
+          <div className="not-found-copy">
+            <h1 id="not-found-title">This page took a wrong turn.</h1>
+            <p>The link may be outdated or the page may have moved. Your next move is still right here.</p>
+            <div className="not-found-actions">
+              <a className="button button-primary" href="/#home">Back to homepage</a>
+              <a className="button button-dark-outline" href="/services">Browse loan options</a>
+            </div>
+          </div>
+
+          <div className="not-found-code" aria-hidden="true">
+            <span>4</span>
+            <span className="not-found-zero">0<i /></span>
+            <span>4</span>
+          </div>
+        </div>
+      </section>
       <Footer />
     </main>
   );
@@ -2440,5 +2485,6 @@ export default function App() {
   if (pagePath === '/privacy-policy' || pagePath === '/privacy') {
     return <LegalPage title="Privacy Policy" sections={privacySections} nodeId="175:592" />;
   }
-  return <HomePage />;
+  if (pagePath === '/') return <HomePage />;
+  return <NotFoundPage />;
 }
