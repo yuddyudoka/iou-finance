@@ -8,6 +8,137 @@ const navItems = [
   ['Contact Us', '/contact'],
 ];
 
+const siteOrigin = 'https://ioufinanceltd.com';
+const socialImageUrl = `${siteOrigin}/assets/iou-finance-social-banner.jpg`;
+
+const pageMetadata = {
+  '/': {
+    title: 'Fast Loans for Nigerians | IOU Finance',
+    description: 'Fast, collateral-free loans for Nigerian employees, traders, and business owners. Apply online and get a quick decision from IOU Finance.',
+  },
+  '/about': {
+    title: 'About IOU Finance | Lending Built Around You',
+    description: 'Meet IOU Finance, a Nigerian lender making straightforward credit accessible to employees, traders, and business owners.',
+  },
+  '/services': {
+    title: 'Loan Services | IOU Finance',
+    description: 'Explore payday, emergency, business, savings, and investment options from IOU Finance.',
+  },
+  '/faq': {
+    title: 'Frequently Asked Questions | IOU Finance',
+    description: 'Find clear answers about IOU Finance loan eligibility, applications, collateral, repayment, and loan amounts.',
+  },
+  '/contact': {
+    title: 'Contact IOU Finance | Get Help',
+    description: 'Contact the IOU Finance team by email, phone, or at our Lagos office for help with loans and applications.',
+  },
+  '/application': {
+    title: 'Apply for a Loan | IOU Finance',
+    description: 'Apply online for an IOU Finance loan in minutes. Submit your details securely and receive a quick decision.',
+  },
+  '/terms-and-conditions': {
+    title: 'Terms and Conditions | IOU Finance',
+    description: 'Read the terms that govern the IOU Finance website and lending services.',
+  },
+  '/privacy-policy': {
+    title: 'Privacy Policy | IOU Finance',
+    description: 'Learn how IOU Finance collects, uses, stores, and protects your personal information.',
+  },
+};
+
+function SiteMetadata({ pagePath, service }) {
+  useEffect(() => {
+    const canonicalPath = pagePath === '/apply' ? '/application'
+      : pagePath === '/terms' ? '/terms-and-conditions'
+        : pagePath === '/privacy' ? '/privacy-policy'
+          : pagePath;
+    const metadata = service
+      ? {
+          title: `${service.title} | IOU Finance`,
+          description: service.summary,
+        }
+      : pageMetadata[canonicalPath] || {
+          title: 'Page Not Found | IOU Finance',
+          description: 'The page you requested could not be found. Return to IOU Finance to explore our loan options.',
+        };
+    const canonicalUrl = `${siteOrigin}${canonicalPath === '/' ? '/' : canonicalPath}`;
+    const isPrivatePage = pagePath === '/admin';
+    const isMissingPage = !service && !pageMetadata[canonicalPath];
+
+    document.title = metadata.title;
+
+    const setMeta = (selector, attributes) => {
+      let element = document.head.querySelector(selector);
+      if (!element) {
+        element = document.createElement('meta');
+        document.head.appendChild(element);
+      }
+      Object.entries(attributes).forEach(([name, value]) => element.setAttribute(name, value));
+    };
+
+    setMeta('meta[name="description"]', { name: 'description', content: metadata.description });
+    setMeta('meta[name="robots"]', { name: 'robots', content: isPrivatePage || isMissingPage ? 'noindex, nofollow' : 'index, follow' });
+    setMeta('meta[property="og:type"]', { property: 'og:type', content: 'website' });
+    setMeta('meta[property="og:site_name"]', { property: 'og:site_name', content: 'IOU Finance' });
+    setMeta('meta[property="og:title"]', { property: 'og:title', content: metadata.title });
+    setMeta('meta[property="og:description"]', { property: 'og:description', content: metadata.description });
+    setMeta('meta[property="og:url"]', { property: 'og:url', content: canonicalUrl });
+    setMeta('meta[property="og:image"]', { property: 'og:image', content: socialImageUrl });
+    setMeta('meta[property="og:image:width"]', { property: 'og:image:width', content: '1200' });
+    setMeta('meta[property="og:image:height"]', { property: 'og:image:height', content: '630' });
+    setMeta('meta[property="og:image:alt"]', { property: 'og:image:alt', content: 'IOU Finance — fast loans for Nigerian employees, traders, and business owners' });
+    setMeta('meta[name="twitter:card"]', { name: 'twitter:card', content: 'summary_large_image' });
+    setMeta('meta[name="twitter:title"]', { name: 'twitter:title', content: metadata.title });
+    setMeta('meta[name="twitter:description"]', { name: 'twitter:description', content: metadata.description });
+    setMeta('meta[name="twitter:image"]', { name: 'twitter:image', content: socialImageUrl });
+
+    let canonical = document.head.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      document.head.appendChild(canonical);
+    }
+    canonical.href = canonicalUrl;
+
+    let structuredData = document.head.querySelector('#iou-structured-data');
+    if (!structuredData) {
+      structuredData = document.createElement('script');
+      structuredData.id = 'iou-structured-data';
+      structuredData.type = 'application/ld+json';
+      document.head.appendChild(structuredData);
+    }
+    const graph = [{
+      '@type': ['Organization', 'FinancialService'],
+      '@id': `${siteOrigin}/#organization`,
+      name: 'IOU Finance Ltd.',
+      url: siteOrigin,
+      logo: `${siteOrigin}/assets/logo-raw-2.png`,
+      email: 'contact@ioufinanceltd.com',
+      telephone: '+2347025700040',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: '20 Mojidi Street, off Toyin Street',
+        addressLocality: 'Ikeja',
+        addressRegion: 'Lagos',
+        addressCountry: 'NG',
+      },
+    }];
+    if (canonicalPath === '/faq') {
+      graph.push({
+        '@type': 'FAQPage',
+        mainEntity: faqItems.map(({ question, answer }) => ({
+          '@type': 'Question',
+          name: question,
+          acceptedAnswer: { '@type': 'Answer', text: answer },
+        })),
+      });
+    }
+    structuredData.textContent = JSON.stringify({ '@context': 'https://schema.org', '@graph': graph });
+  }, [pagePath, service]);
+
+  return null;
+}
+
 const faqItems = [
   {
     question: 'What is IOU Finance?',
@@ -98,30 +229,30 @@ const privacySections = [
 const benefits = [
   {
     title: 'Same-Day Disbursement',
-    description: "Business doesn't wait for approval letters, and neither do we. Apply today, get approved, and see the money in your account before the day is out.",
-    image: '/assets/benefit-same-day.jpg',
+    description: 'Apply, receive a quick decision, and get approved funds in your account without unnecessary delays.',
+    image: '/assets/benefit-same-day.webp',
     imageAlt: 'A financial professional presenting a performance chart',
     imagePosition: '50% 42%',
   },
   {
     title: 'No Collateral, No Wahala',
-    description: 'No landed property, no guarantor drama, no complicated paperwork. We lend based on trust in your hustle, not what you own.',
-    image: '/assets/benefit-no-collateral.jpg',
+    description: 'Eligible applicants can access funding without traditional collateral, subject to assessment, documentation, and applicable terms.',
+    image: '/assets/benefit-no-collateral.webp',
     imageAlt: 'A business professional giving a confident thumbs up',
     imagePosition: '50% 38%',
   },
   {
     title: 'Transparent Repayment Terms',
-    description: "No hidden charges or surprise deductions. We tell you exactly what you owe and when, before you sign anything — so there's never a nasty surprise.",
-    image: '/assets/benefit-transparent-terms.jpg',
+    description: 'See your repayment amount, schedule, fees, and applicable terms clearly before accepting your loan offer.',
+    image: '/assets/benefit-transparent-terms.webp',
     imageAlt: 'A financial adviser explaining repayment details',
     imagePosition: '50% 8%',
   },
 ];
 
 const stats = [
-  { target: 1.2, decimals: 1, suffix: 'k+', label: 'Loans Disbursed' },
-  { target: 200, prefix: '₦', suffix: 'M+', label: 'Total Amount Funded' },
+  { target: 300, suffix: '+', label: 'Loans Disbursed' },
+  { target: 30, suffix: 'M', label: 'Total Amount Funded' },
   { target: 24, suffix: 'hrs', label: 'Average Approval Time' },
   { target: 98, suffix: '%', label: 'Customer Satisfaction Rate' },
 ];
@@ -130,21 +261,21 @@ const applicationSteps = [
   {
     title: 'Apply for a loan',
     description: 'Fill a quick form with your basic details. Takes less than 5 minutes, no long forms, no wahala.',
-    image: '/assets/process-apply.jpg',
+    image: '/assets/process-apply.webp',
     imageAlt: 'A customer applying for a loan on his phone',
     imagePosition: '50% 48%',
   },
   {
     title: 'Get Approval',
     description: 'Our team reviews your application and gives you a decision fast, most times within hours.',
-    image: '/assets/process-approval.jpg',
+    image: '/assets/process-approval.webp',
     imageAlt: 'A finance professional reviewing an application',
     imagePosition: '48% 42%',
   },
   {
     title: 'Receive Funds',
     description: 'Once approved, the money hits your account the same day, ready to use for whatever you need.',
-    image: '/assets/process-funds.jpg',
+    image: '/assets/process-funds.webp',
     imageAlt: 'A business owner celebrating after receiving funds',
     imagePosition: '50% 42%',
   },
@@ -206,7 +337,7 @@ const defaultServiceDetailContentBySlug = {
   'emergency-loan': {
     title: 'Emergency Loan',
     summary: "Life doesn't wait, and neither do we. Get cash in hand within hours to handle urgent needs no long stories, no delays.",
-    cardImage: '/assets/service-emergency.png',
+    cardImage: '/assets/service-emergency.webp',
     image: null,
     overviewTitle: 'Get the funds you need, fast and stress-free',
     overview: [
@@ -225,8 +356,9 @@ const defaultServiceDetailContentBySlug = {
   'personal-loan': {
     title: 'Personal Loan',
     summary: 'For school fees, rent, or that thing only you understand — get funds fast, with repayment terms that respect your pocket.',
-    cardImage: '/assets/service-personal.png',
+    cardImage: '/assets/service-personal.webp',
     image: null,
+    imagePosition: '50% 20%',
     overviewTitle: "Handle Life's Personal Expenses Without the Stress",
     overview: [
       "Whether it's school fees, rent, a family event, or an unexpected personal expense, our Personal Loan puts cash in your account quickly so you can handle what matters most without borrowing from ten different people.",
@@ -244,7 +376,7 @@ const defaultServiceDetailContentBySlug = {
   'pay-day-loan': {
     title: 'Pay-Day Loan',
     summary: "Can't wait till payday? Borrow against your next alert and pay back the moment it drops. Simple, fast, stress-free.",
-    cardImage: '/assets/service-payday.png',
+    cardImage: '/assets/service-payday.webp',
     image: null,
     overviewTitle: 'Bridge the Gap Between Now and Payday',
     overview: [
@@ -263,7 +395,7 @@ const defaultServiceDetailContentBySlug = {
   'business-loan': {
     title: 'Business Loan',
     summary: 'Restock, expand, or seize that next big order. We fund the moves that grow your business, not just cover the gaps.',
-    cardImage: '/assets/service-business.png',
+    cardImage: '/assets/service-business.webp',
     image: null,
     imagePosition: '50% 10%',
     overviewTitle: 'Fund the Moves That Grow Your Business',
@@ -283,8 +415,8 @@ const defaultServiceDetailContentBySlug = {
   'group-loan': {
     title: 'Group Loan',
     summary: 'Trade together, borrow together. Designed for market groups and cooperatives who grow stronger by lifting each other up.',
-    cardImage: '/assets/service-group-loan.jpg',
-    image: '/assets/service-group-loan.jpg',
+    cardImage: '/assets/service-group-loan.webp',
+    image: '/assets/service-group-loan.webp',
     imagePosition: '50% 70%',
     overviewTitle: 'Grow Stronger Together',
     overview: [
@@ -303,8 +435,8 @@ const defaultServiceDetailContentBySlug = {
   'lpo-financing': {
     title: 'LPO Financing',
     summary: 'Got a local purchase order but no capital to fulfil it? We bridge the gap so you never turn down a good contract again.',
-    cardImage: '/assets/service-lpo-financing.jpg',
-    image: '/assets/service-lpo-financing.jpg',
+    cardImage: '/assets/service-lpo-financing.webp',
+    image: '/assets/service-lpo-financing.webp',
     imagePosition: '54% 50%',
     overviewTitle: 'Never Turn Down a Good Contract Again',
     overview: [
@@ -323,8 +455,8 @@ const defaultServiceDetailContentBySlug = {
   'asset-financing': {
     title: 'Asset Financing',
     summary: 'Get the equipment, tools, or inventory your business needs today, and spread the cost over time while you put it to work.',
-    cardImage: '/assets/service-asset-financing.jpg',
-    image: '/assets/service-asset-financing.jpg',
+    cardImage: '/assets/service-asset-financing.webp',
+    image: '/assets/service-asset-financing.webp',
     imagePosition: '50% 50%',
     overviewTitle: 'Get the Tools You Need to Work and Earn',
     overview: [
@@ -343,8 +475,8 @@ const defaultServiceDetailContentBySlug = {
   'savings-and-investment': {
     title: 'Savings & Investment',
     summary: 'Spend. Save. Earn. Grow your money with a plan that works as hard as you do, so your hustle today builds your future tomorrow.',
-    cardImage: '/assets/service-savings-investment.jpg',
-    image: '/assets/service-savings-investment.jpg',
+    cardImage: '/assets/service-savings-investment.webp',
+    image: '/assets/service-savings-investment.webp',
     imagePosition: '50% 48%',
     overviewTitle: 'Build a Future While You Handle Today',
     overview: [
@@ -364,6 +496,12 @@ const defaultServiceDetailContentBySlug = {
 
 const SERVICE_CMS_STORAGE_KEY = 'iou-finance-services-cms-v2';
 const LEGACY_SERVICE_CMS_STORAGE_KEY = 'iou-finance-services-cms-v1';
+const RETIRED_SERVICE_SLUGS = new Set([
+  'personal-loan',
+  'group-loan',
+  'lpo-financing',
+  'asset-financing',
+]);
 const refreshedServiceImageSlugs = new Set([
   'group-loan',
   'lpo-financing',
@@ -372,13 +510,15 @@ const refreshedServiceImageSlugs = new Set([
 ]);
 
 function createDefaultServiceRecords() {
-  return Object.entries(defaultServiceDetailContentBySlug).map(([slug, service], index) => ({
-    ...service,
-    slug,
-    published: true,
-    order: index,
-    updatedAt: null,
-  }));
+  return Object.entries(defaultServiceDetailContentBySlug)
+    .filter(([slug]) => !RETIRED_SERVICE_SLUGS.has(slug))
+    .map(([slug, service], index) => ({
+      ...service,
+      slug,
+      published: true,
+      order: index,
+      updatedAt: null,
+    }));
 }
 
 function readServiceCmsRecords() {
@@ -390,7 +530,10 @@ function readServiceCmsRecords() {
     if (!Array.isArray(storedRecords) || !storedRecords.length) return createDefaultServiceRecords();
 
     const normalisedRecords = storedRecords
-      .filter((service) => service && typeof service.slug === 'string' && typeof service.title === 'string')
+      .filter((service) => service
+        && typeof service.slug === 'string'
+        && typeof service.title === 'string'
+        && !RETIRED_SERVICE_SLUGS.has(service.slug))
       .map((service, index) => {
         const defaults = defaultServiceDetailContentBySlug[service.slug] || {};
         const useRefreshedImage = isLegacyMigration && refreshedServiceImageSlugs.has(service.slug);
@@ -400,10 +543,10 @@ function readServiceCmsRecords() {
         let imagePosition = useRefreshedImage
           ? defaults.imagePosition
           : service.imagePosition || defaults.imagePosition || '50% 50%';
-        const needsBusinessFocusCorrection = service.slug === 'business-loan'
+        const needsDefaultFocusCorrection = ['business-loan', 'personal-loan'].includes(service.slug)
           && canonicalImage === defaults.cardImage
           && (!service.imagePosition || service.imagePosition === '50% 50%');
-        if (needsBusinessFocusCorrection) imagePosition = defaults.imagePosition;
+        if (needsDefaultFocusCorrection) imagePosition = defaults.imagePosition;
 
         return {
           summary: '',
@@ -436,10 +579,12 @@ function readServiceCmsRecords() {
 }
 
 function saveServiceCmsRecords(records) {
-  const orderedRecords = records.map((service, index) => {
+  const orderedRecords = records
+    .filter((service) => !RETIRED_SERVICE_SLUGS.has(service.slug))
+    .map((service, index) => {
     const canonicalImage = service.cardImage || service.image || null;
     return { ...service, cardImage: canonicalImage, image: canonicalImage, order: index };
-  });
+    });
   const serialisedRecords = JSON.stringify(orderedRecords);
   if (serialisedRecords.length > 4_000_000) throw new Error('CMS_STORAGE_LIMIT');
   window.localStorage.setItem(SERVICE_CMS_STORAGE_KEY, serialisedRecords);
@@ -582,16 +727,9 @@ function LoanCalculator() {
   useEffect(() => {
     if (!isOpen) return undefined;
 
-    const mobileViewport = window.matchMedia('(max-width: 600px)');
     const previousOverflow = document.body.style.overflow;
-    const syncPageScroll = () => {
-      document.body.style.overflow = mobileViewport.matches ? 'hidden' : previousOverflow;
-    };
-
-    syncPageScroll();
-    mobileViewport.addEventListener('change', syncPageScroll);
+    document.body.style.overflow = 'hidden';
     return () => {
-      mobileViewport.removeEventListener('change', syncPageScroll);
       document.body.style.overflow = previousOverflow;
     };
   }, [isOpen]);
@@ -609,9 +747,17 @@ function LoanCalculator() {
   return (
     <div className={`loan-calculator${isOpen ? ' loan-calculator-open' : ''}`} ref={calculatorRef}>
       {isOpen && (
-        <section className="loan-calculator-panel" id="loan-calculator-panel" aria-label="Loan calculator">
+        <>
+          <button className="loan-calculator-backdrop" type="button" aria-label="Close loan calculator" onClick={() => setIsOpen(false)} />
+          <section
+            className="loan-calculator-panel"
+            id="loan-calculator-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="loan-calculator-title"
+          >
           <div className="loan-calculator-panel-header">
-            <h2>Loan Calculator</h2>
+            <h2 id="loan-calculator-title">Loan Calculator</h2>
             <button
               className="loan-calculator-close"
               type="button"
@@ -633,6 +779,7 @@ function LoanCalculator() {
                     id="loan-amount"
                     type="text"
                     inputMode="numeric"
+                    placeholder="0"
                     value={formatMoneyInput(amount)}
                     onChange={(event) => {
                       const digits = event.target.value.replace(/\D/g, '');
@@ -652,7 +799,7 @@ function LoanCalculator() {
                 aria-label="Loan amount"
                 onChange={(event) => setAmount(Number(event.target.value))}
               />
-              <div className="loan-calculator-limits"><span>₦50,000</span><span>₦5,000,000</span></div>
+              <div className="loan-calculator-limits"><span>₦50k</span><span>₦5M</span></div>
             </div>
 
             <div className="loan-calculator-field">
@@ -664,6 +811,7 @@ function LoanCalculator() {
                     type="number"
                     min={minDuration}
                     max={maxDuration}
+                    placeholder="0"
                     value={duration}
                     onChange={(event) => setDuration(event.target.value === '' ? '' : Number(event.target.value))}
                   />
@@ -684,10 +832,12 @@ function LoanCalculator() {
             </div>
           </div>
 
-          <div className="loan-calculator-summary" aria-live="polite">
-            <div><span>You Repay</span><strong>{loanCurrencyFormatter.format(totalRepayment)}</strong></div>
-            <div><span>Monthly</span><strong>{loanCurrencyFormatter.format(monthlyRepayment)}</strong></div>
-            <div><span>Interest</span><strong>{loanCurrencyFormatter.format(interest)}</strong></div>
+          <div className="loan-calculator-summary-block">
+            <div className="loan-calculator-summary" aria-live="polite">
+              <div><span>You Repay</span><strong>{loanCurrencyFormatter.format(totalRepayment)}</strong></div>
+              <div><span>Monthly</span><strong>{loanCurrencyFormatter.format(monthlyRepayment)}</strong></div>
+              <div><span>Interest</span><strong>{loanCurrencyFormatter.format(interest)}</strong></div>
+            </div>
           </div>
 
           <a
@@ -697,7 +847,8 @@ function LoanCalculator() {
           >
             Apply for a Loan
           </a>
-        </section>
+          </section>
+        </>
       )}
 
       <button
@@ -708,7 +859,7 @@ function LoanCalculator() {
         onClick={() => setIsOpen((current) => !current)}
       >
         <img src="/assets/calculator-icon.png" alt="" />
-        <span>Loan Calculator</span>
+        <span>Calculate Loan</span>
       </button>
     </div>
   );
@@ -717,7 +868,7 @@ function LoanCalculator() {
 function Hero() {
   return (
     <section className="hero" id="home" data-node-id="15:72">
-      <img className="hero-image" src="/assets/hero-home-executive-wide.png" alt="A smiling business professional in a navy suit" />
+      <img className="hero-image" src="/assets/hero-home-executive-wide.webp" alt="A smiling business professional in a navy suit" fetchPriority="high" decoding="async" />
       <div className="hero-overlay" />
       <div className="hero-content">
         <div className="hero-copy">
@@ -740,7 +891,7 @@ function AboutSection() {
       <div className="about-content">
         <div className="about-heading" data-node-id="30:6">
           <p className="section-label">ABOUT US</p>
-          <h2>At IOU Finance, we give employees, traders, and business owners fast access to the cash they need — no collateral, no long queues, no wahala.</h2>
+          <h2>At IOU Finance, we give employees, traders, and business owners fast access to funding built around how they work and earn.</h2>
         </div>
 
         <div className="about-summary" data-node-id="30:9">
@@ -755,7 +906,7 @@ function AboutSection() {
 function ServicesHero() {
   return (
     <section className="services-hero" data-node-id="100:479">
-      <img className="services-hero-image services-page-hero-image" src="/assets/about-hero-executive-office.png" alt="A smiling business professional seated at his office desk" />
+      <img className="services-hero-image services-page-hero-image" src="/assets/about-hero-executive-office.webp" alt="A smiling business professional seated at his office desk" fetchPriority="high" decoding="async" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content">
         <p>~SERVICES~</p>
@@ -768,7 +919,7 @@ function ServicesHero() {
 function FaqHero() {
   return (
     <section className="services-hero" data-node-id="107:746">
-      <img className="services-hero-image faq-hero-image" src="/assets/faq-hero-advisor-office.png" alt="A financial advisor seated at her desk ready to answer questions" />
+      <img className="services-hero-image faq-hero-image" src="/assets/faq-hero-advisor-office.webp" alt="A financial advisor seated at her desk ready to answer questions" fetchPriority="high" decoding="async" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content">
         <p>~FAQs~</p>
@@ -783,7 +934,14 @@ function FaqSection() {
     <section className="faq-section" id="faqs" data-node-id="107:750">
       <div className="faq-list">
         {faqItems.map(({ question, answer }) => (
-          <details className="faq-item" key={question}>
+          <details
+            className="faq-item"
+            key={question}
+            onClick={(event) => {
+              if (event.target.closest('summary')) return;
+              event.currentTarget.open = !event.currentTarget.open;
+            }}
+          >
             <summary>
               <span>{question}</span>
               <span className="faq-chevron" aria-hidden="true">
@@ -802,7 +960,7 @@ function FaqSection() {
 function AboutPageHero() {
   return (
     <section className="services-hero about-page-hero" data-node-id="142:1955">
-      <img className="services-hero-image about-hero-image" src="/assets/about-hero-woman-office.png" alt="A confident business professional standing in a modern office" />
+      <img className="services-hero-image about-hero-image" src="/assets/about-hero-woman-office.webp" alt="A confident business professional standing in a modern office" fetchPriority="high" decoding="async" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content about-hero-content">
         <p>~About Us~</p>
@@ -815,7 +973,7 @@ function AboutPageHero() {
 function ContactPageHero() {
   return (
     <section className="services-hero contact-page-hero">
-      <img className="services-hero-image contact-hero-image" src="/assets/contact-hero-women-meeting.png" alt="A business leader speaking with colleagues in a bright meeting room" />
+      <img className="services-hero-image contact-hero-image" src="/assets/contact-hero-women-meeting.webp" alt="A business leader speaking with colleagues in a bright meeting room" fetchPriority="high" decoding="async" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content contact-hero-content">
         <p>~Contact Us~</p>
@@ -828,7 +986,7 @@ function ContactPageHero() {
 function ApplicationPageHero() {
   return (
     <section className="services-hero application-page-hero">
-      <img className="services-hero-image application-hero-image" src="/assets/contact-hero-team-meeting.png" alt="A group of business professionals discussing growth and funding" />
+      <img className="services-hero-image application-hero-image" src="/assets/contact-hero-team-meeting.webp" alt="A group of business professionals discussing growth and funding" fetchPriority="high" decoding="async" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content contact-hero-content application-hero-content">
         <p>~Application~</p>
@@ -880,13 +1038,13 @@ function AboutMissionSection() {
           </div>
         </div>
         <div className="about-media-placeholder about-mission-media">
-          <img src="/assets/about-our-mission.jpg" alt="A team celebrating progress together" />
+          <img src="/assets/about-our-mission.webp" alt="A team celebrating progress together" loading="lazy" decoding="async" />
         </div>
       </div>
 
       <div className="about-detail-row about-values-row">
         <div className="about-media-placeholder about-values-media">
-          <img src="/assets/about-what-we-stand-for.jpg" alt="A team reviewing their work together" />
+          <img src="/assets/about-what-we-stand-for.webp" alt="A team reviewing their work together" loading="lazy" decoding="async" />
         </div>
         <div className="about-values-copy">
           <div>
@@ -1218,7 +1376,7 @@ function ServiceDetailMedia({ image, imagePosition, title }) {
   return (
     <section className="service-detail-media-section" data-node-id="131:1843">
       <div className="service-detail-media">
-        {image && <img src={image} alt={`${title} service`} style={{ objectPosition: imagePosition }} />}
+        {image && <img src={image} alt={`${title} service`} style={{ objectPosition: imagePosition }} loading="lazy" decoding="async" />}
       </div>
     </section>
   );
@@ -1247,7 +1405,7 @@ function ServiceCard({ title, description, image, imagePosition, arrow = '/asset
   return (
     <a className="service-card" href={detailHref}>
       <div className="service-image" aria-hidden="true">
-        {image && <img src={image} alt="" style={{ objectPosition: imagePosition }} />}
+        {image && <img src={image} alt="" style={{ objectPosition: imagePosition }} loading="lazy" decoding="async" />}
       </div>
       <div className="service-card-content">
         <div className="service-copy">
@@ -1373,6 +1531,7 @@ function BenefitsSection() {
                   alt={benefit.imageAlt}
                   style={{ objectPosition: benefit.imagePosition }}
                   loading="lazy"
+                  decoding="async"
                 />
                 <div className="benefit-copy">
                   <h3>{benefit.title}</h3>
@@ -1389,6 +1548,8 @@ function BenefitsSection() {
                 src={benefit.image}
                 alt=""
                 style={{ objectPosition: benefit.imagePosition }}
+                loading="lazy"
+                decoding="async"
                 ref={(image) => { stickyImageRefs.current[index] = image; }}
                 key={benefit.title}
               />
@@ -1450,7 +1611,8 @@ function StatsSection() {
       <div className="stats-container">
         {stats.map((stat) => (
           <div className="stat-item" key={stat.label}>
-            <strong aria-label={formatStat(stat, 1)}>
+            <strong>
+              <span className="sr-only">{formatStat(stat, 1)}</span>
               <span aria-hidden="true">{formatStat(stat, progress)}</span>
             </strong>
             <span>{stat.label}</span>
@@ -1470,6 +1632,8 @@ function ProcessImage({ src, alt, position = 'center' }) {
         src={src}
         alt={alt}
         style={{ objectPosition: position }}
+        loading="lazy"
+        decoding="async"
       />
     </div>
   );
@@ -1540,7 +1704,7 @@ function ProcessSection() {
         </div>
 
         <ProcessImage
-          src="/assets/process-eligibility.jpg"
+          src="/assets/process-eligibility.webp"
           alt="A small business owner who is eligible to apply"
           position="48% 15%"
         />
@@ -1550,16 +1714,16 @@ function ProcessSection() {
 }
 
 function TestimonialsSection() {
+  const viewportRef = useRef(null);
   const trackRef = useRef(null);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
-  const [testimonialOffset, setTestimonialOffset] = useState(0);
   const visibleTestimonials = window.innerWidth >= 1350 ? 4 : window.innerWidth > 900 ? 3 : window.innerWidth > 600 ? 2 : 1;
   const lastTestimonial = testimonials.length - visibleTestimonials;
 
   useEffect(() => {
     const resetCarousel = () => {
       setActiveTestimonial(0);
-      setTestimonialOffset(0);
+      viewportRef.current?.scrollTo({ left: 0 });
     };
 
     window.addEventListener('resize', resetCarousel);
@@ -1567,17 +1731,27 @@ function TestimonialsSection() {
   }, []);
 
   const moveCarousel = (direction) => {
+    const viewport = viewportRef.current;
     const track = trackRef.current;
     const firstCard = track?.firstElementChild;
 
-    if (!track || !firstCard) return;
+    if (!viewport || !track || !firstCard) return;
 
     const next = Math.min(Math.max(activeTestimonial + direction, 0), lastTestimonial);
     const step = firstCard.getBoundingClientRect().width + 20;
-    const left = Math.min(next * step, track.scrollWidth - track.parentElement.clientWidth);
+    const left = Math.min(next * step, track.scrollWidth - viewport.clientWidth);
 
-    setTestimonialOffset(left);
+    viewport.scrollTo({ left, behavior: 'smooth' });
     setActiveTestimonial(next);
+  };
+
+  const syncActiveTestimonial = () => {
+    const viewport = viewportRef.current;
+    const firstCard = trackRef.current?.firstElementChild;
+    if (!viewport || !firstCard) return;
+
+    const step = firstCard.getBoundingClientRect().width + 20;
+    setActiveTestimonial(Math.min(Math.round(viewport.scrollLeft / step), lastTestimonial));
   };
 
   return (
@@ -1617,11 +1791,16 @@ function TestimonialsSection() {
           </div>
         </div>
 
-        <div className="testimonials-viewport">
+        <div
+          className="testimonials-viewport"
+          ref={viewportRef}
+          onScroll={syncActiveTestimonial}
+          tabIndex="0"
+          aria-label="Customer testimonials. Scroll horizontally to view more."
+        >
           <div
             className="testimonials-track"
             ref={trackRef}
-            style={{ transform: `translate3d(-${testimonialOffset}px, 0, 0)` }}
           >
             {testimonials.map((testimonial, index) => (
               <article className={`testimonial-card ${index % 2 === 1 ? 'testimonial-card-dark' : ''}`} key={testimonial.name}>
@@ -1634,7 +1813,7 @@ function TestimonialsSection() {
                 <blockquote>{testimonial.quote}</blockquote>
 
                 <div className="testimonial-author">
-                  <img className="testimonial-avatar" src={testimonial.image} alt={testimonial.imageAlt} />
+                  <img className="testimonial-avatar" src={testimonial.image} alt={testimonial.imageAlt} loading="lazy" decoding="async" />
                   <div>
                     <cite>{testimonial.name}</cite>
                     <span>{testimonial.role}</span>
@@ -1708,7 +1887,7 @@ function Footer() {
         <div className="footer-main">
           <div className="footer-intro">
             <a className="footer-brand" href="/#home" aria-label="IOU Finance home">
-              <img src="/assets/footer-logo.png" alt="IOU Finance Ltd." />
+              <img src="/assets/footer-logo.png" alt="IOU Finance Ltd." loading="lazy" decoding="async" />
             </a>
             <p>IOU Finance gives employees, traders, and business owners fast access to loans — no collateral, no long wait. Spend. Save. Earn.</p>
           </div>
@@ -1846,7 +2025,6 @@ function AboutPage() {
       <AboutStatementSection />
       <AboutMissionSection />
       <StatsSection />
-      <ServicesSection />
       <AboutTeamSection />
       <FundingCtaSection
         title="Join our Family and get funded today"
@@ -1895,12 +2073,6 @@ function ApplicationPage() {
 }
 
 function NotFoundPage() {
-  useEffect(() => {
-    const previousTitle = document.title;
-    document.title = 'Page Not Found | IOU Finance';
-    return () => { document.title = previousTitle; };
-  }, []);
-
   return (
     <main className="not-found-page">
       <NavBar />
@@ -2472,19 +2644,27 @@ export default function App() {
   const pagePath = window.location.pathname.replace(/\/+$/, '').toLowerCase() || '/';
   const serviceSlug = pagePath.startsWith('/services/') ? pagePath.slice('/services/'.length) : '';
   const serviceDetail = serviceDetailContentBySlug[serviceSlug];
-  if (pagePath === '/admin') return <AdminAccess />;
-  if (pagePath === '/services') return <ServicesPage />;
-  if (serviceDetail) return <ServiceDetailPage service={serviceDetail} />;
-  if (pagePath === '/faq') return <FaqPage />;
-  if (pagePath === '/about') return <AboutPage />;
-  if (pagePath === '/contact') return <ContactPage />;
-  if (pagePath === '/application' || pagePath === '/apply') return <ApplicationPage />;
+  let page;
+  if (pagePath === '/admin') page = <AdminAccess />;
+  else if (pagePath === '/services') page = <ServicesPage />;
+  else if (serviceDetail) page = <ServiceDetailPage service={serviceDetail} />;
+  else if (pagePath === '/faq') page = <FaqPage />;
+  else if (pagePath === '/about') page = <AboutPage />;
+  else if (pagePath === '/contact') page = <ContactPage />;
+  else if (pagePath === '/application' || pagePath === '/apply') page = <ApplicationPage />;
   if (pagePath === '/terms-and-conditions' || pagePath === '/terms') {
-    return <LegalPage title="Terms of use" sections={termsSections} nodeId="170:3766" />;
+    page = <LegalPage title="Terms of use" sections={termsSections} nodeId="170:3766" />;
   }
-  if (pagePath === '/privacy-policy' || pagePath === '/privacy') {
-    return <LegalPage title="Privacy Policy" sections={privacySections} nodeId="175:592" />;
+  else if (pagePath === '/privacy-policy' || pagePath === '/privacy') {
+    page = <LegalPage title="Privacy Policy" sections={privacySections} nodeId="175:592" />;
   }
-  if (pagePath === '/') return <HomePage />;
-  return <NotFoundPage />;
+  else if (pagePath === '/') page = <HomePage />;
+  else if (!page) page = <NotFoundPage />;
+
+  return (
+    <>
+      <SiteMetadata pagePath={pagePath} service={serviceDetail} />
+      {page}
+    </>
+  );
 }

@@ -1,0 +1,19 @@
+# IOU Finance
+
+IOU Finance provides straightforward lending information and online loan applications for Nigerian employees, traders, and business owners.
+
+## Primary pages
+
+- [Home](https://ioufinanceltd.com/)
+- [About IOU Finance](https://ioufinanceltd.com/about)
+- [Loan services](https://ioufinanceltd.com/services)
+- [Frequently asked questions](https://ioufinanceltd.com/faq)
+- [Contact IOU Finance](https://ioufinanceltd.com/contact)
+- [Apply for a loan](https://ioufinanceltd.com/application)
+
+## Policies
+
+- [Terms and conditions](https://ioufinanceltd.com/terms-and-conditions)
+- [Privacy policy](https://ioufinanceltd.com/privacy-policy)
+
+Information on this website is general and does not constitute an approval or offer of credit. Eligibility, documentation, fees, rates, and repayment terms are subject to assessment and the applicable loan agreement.

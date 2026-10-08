@@ -3,6 +3,12 @@ const SESSION_DURATION_SECONDS = 8 * 60 * 60;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_CMS_BYTES = 1024 * 1024;
 const SERVICES_KEY = 'cms:services';
+const RETIRED_SERVICE_SLUGS = new Set([
+  'personal-loan',
+  'group-loan',
+  'lpo-financing',
+  'asset-financing',
+]);
 const REQUIRED_APPLICATION_FIELDS = [
   'firstName', 'lastName', 'phone', 'email', 'employer',
   'monthlyIncome', 'amountNeeded', 'duration', 'homeAddress', 'bvn', 'nin',
@@ -275,7 +281,10 @@ async function serveCmsImage(env, path) {
 function normaliseCmsRecords(records) {
   if (!Array.isArray(records)) return null;
   return records
-    .filter((service) => service && typeof service.slug === 'string' && typeof service.title === 'string')
+    .filter((service) => service
+      && typeof service.slug === 'string'
+      && typeof service.title === 'string'
+      && !RETIRED_SERVICE_SLUGS.has(service.slug))
     .map((service, index) => ({
       ...service,
       slug: service.slug.slice(0, 100),
@@ -291,7 +300,7 @@ async function handleServicesCms(request, env) {
 
   if (request.method === 'GET') {
     const records = await env.CMS_KV.get(SERVICES_KEY, 'json');
-    return json({ records: Array.isArray(records) ? records : null });
+    return json({ records: Array.isArray(records) ? normaliseCmsRecords(records) : null });
   }
 
   if (request.method !== 'PUT') return json({ error: 'Method not allowed.' }, 405);
