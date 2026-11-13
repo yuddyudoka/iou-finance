@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import AdminContentEditor from './AdminContentEditor';
 
 const navItems = [
   ['Home', '/#home'],
@@ -9,7 +10,6 @@ const navItems = [
 ];
 
 const siteOrigin = 'https://ioufinanceltd.com';
-const socialImageUrl = `${siteOrigin}/assets/iou-finance-social-banner.jpg`;
 
 const pageMetadata = {
   '/': {
@@ -44,6 +44,10 @@ const pageMetadata = {
     title: 'Privacy Policy | IOU Finance',
     description: 'Learn how IOU Finance collects, uses, stores, and protects your personal information.',
   },
+  '/admin': {
+    title: 'IOU Finance CMS',
+    description: 'Secure content management for IOU Finance.',
+  },
 };
 
 function SiteMetadata({ pagePath, service }) {
@@ -57,7 +61,7 @@ function SiteMetadata({ pagePath, service }) {
           title: `${service.title} | IOU Finance`,
           description: service.summary,
         }
-      : pageMetadata[canonicalPath] || {
+      : siteContent.seo.pages[canonicalPath] || {
           title: 'Page Not Found | IOU Finance',
           description: 'The page you requested could not be found. Return to IOU Finance to explore our loan options.',
         };
@@ -83,14 +87,17 @@ function SiteMetadata({ pagePath, service }) {
     setMeta('meta[property="og:title"]', { property: 'og:title', content: metadata.title });
     setMeta('meta[property="og:description"]', { property: 'og:description', content: metadata.description });
     setMeta('meta[property="og:url"]', { property: 'og:url', content: canonicalUrl });
-    setMeta('meta[property="og:image"]', { property: 'og:image', content: socialImageUrl });
+    const configuredSocialImage = siteContent.seo.socialImage.src.startsWith('http')
+      ? siteContent.seo.socialImage.src
+      : `${siteOrigin}${siteContent.seo.socialImage.src}`;
+    setMeta('meta[property="og:image"]', { property: 'og:image', content: configuredSocialImage });
     setMeta('meta[property="og:image:width"]', { property: 'og:image:width', content: '1200' });
     setMeta('meta[property="og:image:height"]', { property: 'og:image:height', content: '630' });
-    setMeta('meta[property="og:image:alt"]', { property: 'og:image:alt', content: 'IOU Finance — fast loans for Nigerian employees, traders, and business owners' });
+    setMeta('meta[property="og:image:alt"]', { property: 'og:image:alt', content: siteContent.seo.socialImage.alt });
     setMeta('meta[name="twitter:card"]', { name: 'twitter:card', content: 'summary_large_image' });
     setMeta('meta[name="twitter:title"]', { name: 'twitter:title', content: metadata.title });
     setMeta('meta[name="twitter:description"]', { name: 'twitter:description', content: metadata.description });
-    setMeta('meta[name="twitter:image"]', { name: 'twitter:image', content: socialImageUrl });
+    setMeta('meta[name="twitter:image"]', { name: 'twitter:image', content: configuredSocialImage });
 
     let canonical = document.head.querySelector('link[rel="canonical"]');
     if (!canonical) {
@@ -126,7 +133,7 @@ function SiteMetadata({ pagePath, service }) {
     if (canonicalPath === '/faq') {
       graph.push({
         '@type': 'FAQPage',
-        mainEntity: faqItems.map(({ question, answer }) => ({
+        mainEntity: siteContent.faqPage.items.map(({ question, answer }) => ({
           '@type': 'Question',
           name: question,
           acceptedAnswer: { '@type': 'Answer', text: answer },
@@ -135,6 +142,45 @@ function SiteMetadata({ pagePath, service }) {
     }
     structuredData.textContent = JSON.stringify({ '@context': 'https://schema.org', '@graph': graph });
   }, [pagePath, service]);
+
+  return null;
+}
+
+function DeferredImageWarmup({ disabled = false }) {
+  useEffect(() => {
+    if (disabled) return undefined;
+
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || '')) return undefined;
+
+    let timeoutId;
+    let idleId;
+    const prefetchImages = () => {
+      document.querySelectorAll('img[loading="lazy"]').forEach((image) => {
+        const href = image.currentSrc || image.src;
+        if (!href || document.head.querySelector(`link[data-image-warmup="${CSS.escape(href)}"]`)) return;
+        const link = document.createElement('link');
+        link.rel = 'prefetch';
+        link.as = 'image';
+        link.href = href;
+        link.dataset.imageWarmup = href;
+        document.head.appendChild(link);
+      });
+    };
+    const scheduleWarmup = () => {
+      if ('requestIdleCallback' in window) idleId = window.requestIdleCallback(prefetchImages, { timeout: 2500 });
+      else timeoutId = window.setTimeout(prefetchImages, 900);
+    };
+
+    if (document.readyState === 'complete') scheduleWarmup();
+    else window.addEventListener('load', scheduleWarmup, { once: true });
+
+    return () => {
+      window.removeEventListener('load', scheduleWarmup);
+      if (idleId) window.cancelIdleCallback(idleId);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [disabled]);
 
   return null;
 }
@@ -252,7 +298,7 @@ const benefits = [
 
 const stats = [
   { target: 300, suffix: '+', label: 'Loans Disbursed' },
-  { target: 30, suffix: 'M', label: 'Total Amount Funded' },
+  { target: 30, prefix: '₦', suffix: 'M', label: 'Total Amount Funded' },
   { target: 24, suffix: 'hrs', label: 'Average Approval Time' },
   { target: 98, suffix: '%', label: 'Customer Satisfaction Rate' },
 ];
@@ -333,6 +379,285 @@ const testimonials = [
   },
 ];
 
+function deepMergeContent(defaults, stored) {
+  if (Array.isArray(defaults)) return Array.isArray(stored) ? stored : defaults;
+  if (!defaults || typeof defaults !== 'object') return stored === undefined ? defaults : stored;
+  const incoming = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+  return Object.fromEntries(Object.entries(defaults).map(([key, value]) => [
+    key,
+    deepMergeContent(value, incoming[key]),
+  ]));
+}
+
+const asMedia = (src, alt, position = '50% 50%') => ({ src, alt, position });
+const defaultSiteContent = {
+  global: {
+    brand: {
+      headerLogo: asMedia('/assets/logo-raw-2.png', 'IOU Finance Ltd.'),
+      footerLogo: asMedia('/assets/footer-logo.png', 'IOU Finance Ltd.'),
+    },
+    navigation: {
+      items: navItems.map(([label, href]) => ({ label, href })),
+      applicationLabel: 'Apply for a Loan',
+    },
+    buttons: {
+      apply: 'Apply for a Loan',
+      exploreServices: 'Explore our Services',
+      contact: 'Contact Us',
+      learnMore: 'Learn More',
+    },
+    footer: {
+      description: 'IOU Finance gives employees, traders, and business owners fast access to loans. No collateral, no long wait. Spend. Save. Earn.',
+      menuHeading: 'Menu',
+      servicesHeading: 'Our Services',
+      servicesLink: 'View All Services',
+      securityHeading: 'Security',
+      termsLabel: 'Terms & Conditions',
+      privacyLabel: 'Privacy Policy',
+      socialHeading: 'Social',
+      email: 'contact@ioufinanceltd.com',
+      phoneDisplay: '+234-702-5700-040',
+      phoneHref: '+2347025700040',
+      address: '20 mojidi street, off toyin street ikeja, Lagos',
+      copyright: '© 2026 IOU Finance. All rights reserved.',
+    },
+  },
+  seo: {
+    socialImage: asMedia('/assets/iou-finance-social-banner.jpg', 'IOU Finance, fast loans for Nigerian employees, traders, and business owners'),
+    pages: pageMetadata,
+  },
+  calculator: {
+    title: 'Loan Calculator',
+    amountLabel: 'I Need',
+    durationLabel: 'I Need',
+    durationUnit: 'mths',
+    minimumAmountLabel: '₦50k',
+    maximumAmountLabel: '₦5M',
+    minimumDurationLabel: '1 month',
+    maximumDurationLabel: '12 months',
+    totalLabel: 'You Repay',
+    monthlyLabel: 'Monthly',
+    interestLabel: 'Interest',
+    toggleLabel: 'Calculate Loan',
+    applyLabel: 'Apply for a Loan',
+    icon: asMedia('/assets/calculator-icon.png', ''),
+  },
+  home: {
+    hero: {
+      title: 'Quick Loans? No Wahala, Get Cash in Your Hands Today.',
+      description: 'From handling urgent expenses before payday to restocking your shop or funding your next big order, we lend money that moves with how you earn.',
+      primaryLabel: 'Apply for a Loan',
+      secondaryLabel: 'Explore our Services',
+      media: asMedia('/assets/hero-home-executive-wide.webp', 'A smiling business professional in a navy suit', '68% 20%'),
+    },
+    about: {
+      label: 'ABOUT US',
+      title: 'At IOU Finance, we give employees, traders, and business owners fast access to funding built around how they work and earn.',
+      description: 'Built for hardworking Nigerians. We understand the realities of salaries, daily trade, and growing a business, so our loans move as quickly as your needs do.',
+      buttonLabel: 'About IOU Finance',
+    },
+    services: {
+      label: 'OUR SERVICES',
+      title: "Whatever You're Building, We Have a Loan for It.",
+      buttonLabel: 'Explore More Services',
+    },
+    benefits: {
+      label: 'BENEFITS',
+      title: 'Reasons Why Businesses Trust IOU Finance',
+      items: benefits.map(({ image, imageAlt, imagePosition, ...item }) => ({ ...item, media: asMedia(image, imageAlt, imagePosition) })),
+    },
+    stats: {
+      accessibleLabel: 'IOU Finance statistics',
+      items: stats,
+    },
+    process: {
+      steps: applicationSteps.map(({ image, imageAlt, imagePosition, ...step }) => ({ ...step, media: asMedia(image, imageAlt, imagePosition) })),
+      previousLabel: 'Previous application step',
+      nextLabel: 'Next application step',
+      eligibility: {
+        title: 'WHO CAN APPLY?',
+        description: "Whether you earn a salary, trade for a living, or run a business, IOU Finance is built for you. We keep the process simple and the requirements few, so getting funded doesn't feel like a battle.",
+        documentsHeading: 'Documents Needed',
+        documents: requiredDocuments,
+        media: asMedia('/assets/process-eligibility.webp', 'A small business owner who is eligible to apply', '48% 15%'),
+      },
+    },
+    testimonials: {
+      label: 'TESTIMONIALS',
+      title: 'Hear From The Hustlers Who Trust Us Every Day',
+      previousLabel: 'Previous testimonials',
+      nextLabel: 'Next testimonials',
+      viewportLabel: 'Customer testimonials. Scroll horizontally to view more.',
+      items: testimonials.map(({ image, imageAlt, ...item }) => ({ ...item, media: asMedia(image, imageAlt) })),
+    },
+    cta: {
+      title: 'Your Next Move Starts With Funding.',
+      description: 'No collateral, no long wait. Apply now and get cash in your account, same day.',
+      primaryLabel: 'Apply for a Loan',
+      secondaryLabel: 'Explore our Services',
+    },
+  },
+  servicesPage: {
+    hero: {
+      label: '~SERVICES~',
+      title: 'Loans Built Around How You Earn',
+      media: asMedia('/assets/about-hero-executive-office.webp', 'A smiling business professional seated at his office desk', '56% 50%'),
+    },
+    cta: {
+      title: 'Pick a Loan. Start Growing.',
+      description: "Whatever you need funding for, we've got an option that fits. Apply now and get a decision fast.",
+      primaryLabel: 'Apply for a Loan',
+      secondaryLabel: 'Contact Us',
+    },
+  },
+  faqPage: {
+    hero: {
+      label: '~FAQs~',
+      title: "Got Questions? We've Got Answers.",
+      media: asMedia('/assets/faq-hero-advisor-office.webp', 'A financial advisor seated at her desk ready to answer questions', '72% 50%'),
+    },
+    items: faqItems,
+    cta: {
+      title: 'Ready to Get Funded?',
+      description: "Apply in minutes or talk to someone who can guide you. We're here either way.",
+      primaryLabel: 'Apply for a Loan',
+      secondaryLabel: 'Contact Us',
+    },
+  },
+  aboutPage: {
+    hero: {
+      label: '~About Us~',
+      title: "We're Here for the People Banks Overlook",
+      media: asMedia('/assets/about-hero-woman-office.webp', 'A confident business professional standing in a modern office', '72% 50%'),
+    },
+    statement: 'At IOU Finance, we are committed to putting fast, honest funding in the hands of employees, traders, and business owners across Nigeria. Our team understands the pressures of earning a salary, running a trade, and growing a business, so we offer simple loan options built around how you actually work and earn.',
+    mission: {
+      label: 'OUR MISSION',
+      title: 'Turning Everyday Work Into Lasting Growth',
+      description: "We exist to make credit accessible to every hardworking Nigerian, regardless of collateral, connections, or paperwork. Our vision is a Nigeria where no one's growth is limited by lack of access to capital.",
+      points: [
+        { title: 'Simplify Access to Capital', description: "No collateral, no complicated forms. Just simple requirements anyone can meet, and fast decisions that don't leave you waiting.", icon: asMedia('/assets/about-capital.svg', '') },
+        { title: 'Empower Growth', description: 'We help employees stay financially steady and give traders and business owners the capital to keep moving forward, one loan at a time.', icon: asMedia('/assets/about-growth.svg', '') },
+      ],
+      media: asMedia('/assets/about-our-mission.webp', 'A team celebrating progress together'),
+    },
+    values: {
+      title: 'What we stand for',
+      description: 'Everything we do is guided by a few simple beliefs, the same ones that shape how we lend, how we treat people, and how we build trust every single day.',
+      heading: 'Our Values',
+      items: ['Trust (No hidden charges)', 'Speed (Same-day approval)', 'Dignity (Respect all customers)', 'Accessibility (no complicated forms)'],
+      media: asMedia('/assets/about-what-we-stand-for.webp', 'A team reviewing their work together'),
+    },
+    team: {
+      label: 'OUR TEAM',
+      title: 'Meet The Team Making It Happen',
+      members: [
+        { name: 'Emmanuel Ononibe', role: 'CEO, IOU Finance', photo: asMedia('/assets/emmanuel-ononibe-ceo.jpg', 'Emmanuel Ononibe, CEO of IOU Finance', '50% 55%') },
+        { name: 'Jenifer Okeh Ononibe', role: 'Second Director', photo: asMedia('/assets/jenifer-okeh-ononibe-second-director.jpg', 'Jenifer Okeh Ononibe, Second Director of IOU Finance', '50% 48%') },
+        { name: 'Precious Onyeji', role: 'Senior Staff', photo: asMedia('', 'Portrait of Precious Onyeji') },
+        { name: 'Yemisi Adeniyi', role: 'Junior Staff Member', photo: asMedia('', 'Portrait of Yemisi Adeniyi') },
+      ],
+    },
+    cta: {
+      title: 'Join our Family and get funded today',
+      description: 'Apply today and see why thousands of traders and business owners trust IOU Finance.',
+      primaryLabel: 'Apply for a Loan',
+      secondaryLabel: 'Explore our Services',
+    },
+  },
+  contactPage: {
+    hero: {
+      label: '~Contact Us~',
+      title: "Have a Question, Need Help Or Want To Know More, We're Here For You.",
+      media: asMedia('/assets/contact-hero-women-meeting.webp', 'A business leader speaking with colleagues in a bright meeting room', '72% 50%'),
+    },
+    sectionTitle: 'Get in touch with our team',
+    cards: [
+      { type: 'Email', description: 'Get the latest updates and offers.', value: 'contact@ioufinanceltd.com', href: 'mailto:contact@ioufinanceltd.com', icon: asMedia('/assets/contact-email.svg', '') },
+      { type: 'Office', description: 'Visit or write to us at:', value: '20 mojidi street, off toyin street ikeja, Lagos', href: '', icon: asMedia('/assets/contact-office.svg', '') },
+      { type: 'Phone', description: 'Speak to our team for support.', value: '+234-702-5700-040', href: 'tel:+2347025700040', icon: asMedia('/assets/contact-phone.svg', '') },
+    ],
+    cta: {
+      title: 'Ready to Get Funded?',
+      description: "Skip the wait, apply for a loan now and let's get you sorted.",
+      primaryLabel: 'Apply for a Loan',
+      secondaryLabel: 'Explore our Services',
+    },
+  },
+  applicationPage: {
+    hero: {
+      label: '~Application~',
+      title: 'Start Your Application Today',
+      media: asMedia('/assets/contact-hero-team-meeting.webp', 'A group of business professionals discussing growth and funding', '55% 50%'),
+    },
+    form: {
+      firstNameLabel: 'First Name', firstNamePlaceholder: 'eg. John',
+      lastNameLabel: 'Last Name', lastNamePlaceholder: 'eg. Doe',
+      phoneLabel: 'Phone Number', phonePlaceholder: '+123-456-7890-123',
+      emailLabel: 'E-mail Address', emailPlaceholder: 'name@email.com',
+      employerLabel: 'Business/Employer', employerPlaceholder: 'eg. Your Company',
+      incomeLabel: 'Monthly income (₦)', amountLabel: 'Amount needed (₦)', durationLabel: 'Duration (months)',
+      addressLabel: 'Home Address', addressPlaceholder: 'Enter your full residential address',
+      bvnLabel: 'BVN (11 digits)', ninLabel: 'NIN', passportLabel: 'Passport Photograph', utilityBillLabel: 'Utility Bill',
+      passportPrompt: 'Click to upload a Passport photograph', passportHelp: 'JPG or PNG | clear & recent image | Max 5MB',
+      utilityPrompt: 'Click to upload a recent utility bill', utilityHelp: 'PDF, JPG or PNG | proof of home address | Max 5MB',
+      consentPrefix: 'By clicking this button, you confirm that you have read and agree to our',
+      submitLabel: 'Apply for a Loan', submittingLabel: 'Submitting…',
+      uploadIcon: asMedia('/assets/application-upload.svg', ''),
+    },
+  },
+  serviceDetail: {
+    cta: {
+      title: 'Ready to Handle Your Emergency?',
+      description: 'Apply now and get funded the same day, no stress, no delays.',
+      primaryLabel: 'Apply for a Loan',
+      secondaryLabel: 'Contact Us',
+    },
+  },
+  legal: {
+    lastUpdated: 'Last updated: Jan 2025',
+    terms: { title: 'Terms of use', sections: termsSections },
+    privacy: { title: 'Privacy Policy', sections: privacySections },
+  },
+  notFound: {
+    title: 'This page took a wrong turn.',
+    description: 'The link may be outdated or the page may have moved. Your next move is still right here.',
+    primaryLabel: 'Back to homepage',
+    secondaryLabel: 'Browse loan options',
+  },
+};
+
+function upgradeLegacyTeamContent(content) {
+  const team = content?.aboutPage?.team;
+  if (!Array.isArray(team?.members)) return content;
+
+  const replacementsByLegacyName = {
+    'David Mitchell': defaultSiteContent.aboutPage.team.members[0],
+    'Rachel Bennett': defaultSiteContent.aboutPage.team.members[1],
+    "Kevin O'Brien": defaultSiteContent.aboutPage.team.members[2],
+    'Laura Simmons': defaultSiteContent.aboutPage.team.members[3],
+  };
+  let upgraded = false;
+  const members = team.members.map((member) => {
+    const replacement = replacementsByLegacyName[member?.name];
+    if (!replacement) return member;
+    upgraded = true;
+    return replacement;
+  });
+  if (!upgraded) return content;
+
+  return {
+    ...content,
+    aboutPage: {
+      ...content.aboutPage,
+      team: { ...team, members },
+    },
+  };
+}
+
+const mergeSiteContent = (stored) => upgradeLegacyTeamContent(deepMergeContent(defaultSiteContent, stored));
+const siteContent = mergeSiteContent(window.__IOU_CMS__?.content);
+
 const defaultServiceDetailContentBySlug = {
   'emergency-loan': {
     title: 'Emergency Loan',
@@ -355,7 +680,7 @@ const defaultServiceDetailContentBySlug = {
   },
   'personal-loan': {
     title: 'Personal Loan',
-    summary: 'For school fees, rent, or that thing only you understand — get funds fast, with repayment terms that respect your pocket.',
+    summary: 'For school fees, rent, or that thing only you understand, get funds fast with repayment terms that respect your pocket.',
     cardImage: '/assets/service-personal.webp',
     image: null,
     imagePosition: '50% 20%',
@@ -508,6 +833,12 @@ const refreshedServiceImageSlugs = new Set([
   'asset-financing',
   'savings-and-investment',
 ]);
+const OPTIMIZED_SERVICE_IMAGE_BY_LEGACY_URL = Object.freeze({
+  '/assets/service-emergency.png': '/assets/service-emergency.webp',
+  '/assets/service-payday.png': '/assets/service-payday.webp',
+  '/assets/service-business.png': '/assets/service-business.webp',
+  '/assets/service-savings-investment.jpg': '/assets/service-savings-investment.webp',
+});
 
 function createDefaultServiceRecords() {
   return Object.entries(defaultServiceDetailContentBySlug)
@@ -523,10 +854,13 @@ function createDefaultServiceRecords() {
 
 function readServiceCmsRecords() {
   try {
+    const serverRecords = window.__IOU_CMS__?.services || window.__IOU_SERVICES__;
     const currentRecords = window.localStorage.getItem(SERVICE_CMS_STORAGE_KEY);
     const legacyRecords = window.localStorage.getItem(LEGACY_SERVICE_CMS_STORAGE_KEY);
     const isLegacyMigration = !currentRecords && Boolean(legacyRecords);
-    const storedRecords = JSON.parse(currentRecords || legacyRecords || 'null');
+    const storedRecords = Array.isArray(serverRecords)
+      ? serverRecords
+      : JSON.parse(currentRecords || legacyRecords || 'null');
     if (!Array.isArray(storedRecords) || !storedRecords.length) return createDefaultServiceRecords();
 
     const normalisedRecords = storedRecords
@@ -537,9 +871,10 @@ function readServiceCmsRecords() {
       .map((service, index) => {
         const defaults = defaultServiceDetailContentBySlug[service.slug] || {};
         const useRefreshedImage = isLegacyMigration && refreshedServiceImageSlugs.has(service.slug);
+        const storedImage = service.cardImage || service.image || defaults.cardImage || null;
         const canonicalImage = useRefreshedImage
           ? defaults.cardImage
-          : service.cardImage || service.image || defaults.cardImage || null;
+          : OPTIMIZED_SERVICE_IMAGE_BY_LEGACY_URL[storedImage] || storedImage;
         let imagePosition = useRefreshedImage
           ? defaults.imagePosition
           : service.imagePosition || defaults.imagePosition || '50% 50%';
@@ -638,11 +973,11 @@ function NavBar() {
     <header className={`site-header${isScrolled ? ' site-header-scrolled' : ''}`} data-node-id="53:2012">
       <div className="site-header-inner">
         <a className="brand" href="/#home" aria-label="IOU Finance home">
-          <img src="/assets/logo-raw-2.png" alt="IOU Finance Ltd." />
+          <img src={siteContent.global.brand.headerLogo.src} alt={siteContent.global.brand.headerLogo.alt} style={{ objectPosition: siteContent.global.brand.headerLogo.position }} fetchPriority="high" decoding="async" />
         </a>
 
         <nav className="desktop-nav" aria-label="Primary navigation">
-          {navItems.map(([label, href]) => {
+          {siteContent.global.navigation.items.map(({ label, href }) => {
             const isActive = isCurrentPage(href);
 
             return (
@@ -658,12 +993,12 @@ function NavBar() {
           })}
         </nav>
 
-        <a className="button button-primary nav-cta" href="/application">Apply for a Loan</a>
+        <a className="button button-primary nav-cta" href="/application">{siteContent.global.navigation.applicationLabel}</a>
 
         <details className="mobile-menu">
           <summary aria-label="Toggle navigation menu"><span /><span /><span /></summary>
           <nav aria-label="Mobile navigation">
-            {navItems.map(([label, href]) => {
+            {siteContent.global.navigation.items.map(({ label, href }) => {
               const isActive = isCurrentPage(href);
 
               return (
@@ -677,7 +1012,7 @@ function NavBar() {
                 </a>
               );
             })}
-            <a className="button button-primary" href="/application">Apply for a Loan</a>
+            <a className="button button-primary" href="/application">{siteContent.global.navigation.applicationLabel}</a>
           </nav>
         </details>
       </div>
@@ -757,7 +1092,7 @@ function LoanCalculator() {
             aria-labelledby="loan-calculator-title"
           >
           <div className="loan-calculator-panel-header">
-            <h2 id="loan-calculator-title">Loan Calculator</h2>
+            <h2 id="loan-calculator-title">{siteContent.calculator.title}</h2>
             <button
               className="loan-calculator-close"
               type="button"
@@ -772,7 +1107,7 @@ function LoanCalculator() {
           <div className="loan-calculator-fields">
             <div className="loan-calculator-field">
               <div className="loan-calculator-field-heading">
-                <label htmlFor="loan-amount">I Need</label>
+                <label htmlFor="loan-amount">{siteContent.calculator.amountLabel}</label>
                 <span className="loan-calculator-value loan-calculator-value-amount">
                   <span aria-hidden="true">₦</span>
                   <input
@@ -799,12 +1134,12 @@ function LoanCalculator() {
                 aria-label="Loan amount"
                 onChange={(event) => setAmount(Number(event.target.value))}
               />
-              <div className="loan-calculator-limits"><span>₦50k</span><span>₦5M</span></div>
+              <div className="loan-calculator-limits"><span>{siteContent.calculator.minimumAmountLabel}</span><span>{siteContent.calculator.maximumAmountLabel}</span></div>
             </div>
 
             <div className="loan-calculator-field">
               <div className="loan-calculator-field-heading">
-                <label htmlFor="loan-duration">I Need</label>
+                <label htmlFor="loan-duration">{siteContent.calculator.durationLabel}</label>
                 <span className="loan-calculator-value loan-calculator-value-duration">
                   <input
                     id="loan-duration"
@@ -815,7 +1150,7 @@ function LoanCalculator() {
                     value={duration}
                     onChange={(event) => setDuration(event.target.value === '' ? '' : Number(event.target.value))}
                   />
-                  <span aria-hidden="true">mths</span>
+                  <span aria-hidden="true">{siteContent.calculator.durationUnit}</span>
                 </span>
               </div>
               <input
@@ -828,15 +1163,15 @@ function LoanCalculator() {
                 aria-label="Loan duration in months"
                 onChange={(event) => setDuration(Number(event.target.value))}
               />
-              <div className="loan-calculator-limits"><span>1 month</span><span>12 months</span></div>
+              <div className="loan-calculator-limits"><span>{siteContent.calculator.minimumDurationLabel}</span><span>{siteContent.calculator.maximumDurationLabel}</span></div>
             </div>
           </div>
 
           <div className="loan-calculator-summary-block">
             <div className="loan-calculator-summary" aria-live="polite">
-              <div><span>You Repay</span><strong>{loanCurrencyFormatter.format(totalRepayment)}</strong></div>
-              <div><span>Monthly</span><strong>{loanCurrencyFormatter.format(monthlyRepayment)}</strong></div>
-              <div><span>Interest</span><strong>{loanCurrencyFormatter.format(interest)}</strong></div>
+              <div><span>{siteContent.calculator.totalLabel}</span><strong>{loanCurrencyFormatter.format(totalRepayment)}</strong></div>
+              <div><span>{siteContent.calculator.monthlyLabel}</span><strong>{loanCurrencyFormatter.format(monthlyRepayment)}</strong></div>
+              <div><span>{siteContent.calculator.interestLabel}</span><strong>{loanCurrencyFormatter.format(interest)}</strong></div>
             </div>
           </div>
 
@@ -845,7 +1180,7 @@ function LoanCalculator() {
             href={hasValidValues ? applicationHref : undefined}
             aria-disabled={!hasValidValues}
           >
-            Apply for a Loan
+            {siteContent.calculator.applyLabel}
           </a>
           </section>
         </>
@@ -858,26 +1193,26 @@ function LoanCalculator() {
         aria-controls="loan-calculator-panel"
         onClick={() => setIsOpen((current) => !current)}
       >
-        <img src="/assets/calculator-icon.png" alt="" />
-        <span>Calculate Loan</span>
+        <span>{siteContent.calculator.toggleLabel}</span>
       </button>
     </div>
   );
 }
 
 function Hero() {
+  const content = siteContent.home.hero;
   return (
     <section className="hero" id="home" data-node-id="15:72">
-      <img className="hero-image" src="/assets/hero-home-executive-wide.webp" alt="A smiling business professional in a navy suit" fetchPriority="high" decoding="async" />
+      <img className="hero-image" src={content.media.src} alt={content.media.alt} style={{ objectPosition: content.media.position }} fetchPriority="high" decoding="async" />
       <div className="hero-overlay" />
       <div className="hero-content">
         <div className="hero-copy">
-          <h1>Quick Loans? No Wahala, Get Cash in Your Hands Today.</h1>
-          <p>From handling urgent expenses before payday to restocking your shop or funding your next big order, we lend money that moves with how you earn.</p>
+          <h1>{content.title}</h1>
+          <p>{content.description}</p>
         </div>
         <div className="hero-actions">
-          <a className="button button-primary" href="/application">Apply for a Loan</a>
-          <a className="button button-secondary" href="/services">Explore our Services</a>
+          <a className="button button-primary" href="/application">{content.primaryLabel}</a>
+          <a className="button button-secondary" href="/services">{content.secondaryLabel}</a>
         </div>
       </div>
       <LoanCalculator />
@@ -886,17 +1221,18 @@ function Hero() {
 }
 
 function AboutSection() {
+  const content = siteContent.home.about;
   return (
     <section className="about-section" id="about" data-node-id="30:2">
       <div className="about-content">
         <div className="about-heading" data-node-id="30:6">
-          <p className="section-label">ABOUT US</p>
-          <h2>At IOU Finance, we give employees, traders, and business owners fast access to funding built around how they work and earn.</h2>
+          <p className="section-label">{content.label}</p>
+          <h2>{content.title}</h2>
         </div>
 
         <div className="about-summary" data-node-id="30:9">
-          <p>Built for hardworking Nigerians. We understand the realities of salaries, daily trade, and growing a business, so our loans move as quickly as your needs do.</p>
-          <a className="button button-primary" href="/about">Learn More</a>
+          <p>{content.description}</p>
+          <a className="button button-primary" href="/about">{content.buttonLabel}</a>
         </div>
       </div>
     </section>
@@ -904,26 +1240,28 @@ function AboutSection() {
 }
 
 function ServicesHero() {
+  const content = siteContent.servicesPage.hero;
   return (
     <section className="services-hero" data-node-id="100:479">
-      <img className="services-hero-image services-page-hero-image" src="/assets/about-hero-executive-office.webp" alt="A smiling business professional seated at his office desk" fetchPriority="high" decoding="async" />
+      <img className="services-hero-image services-page-hero-image" src={content.media.src} alt={content.media.alt} style={{ objectPosition: content.media.position }} fetchPriority="high" decoding="async" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content">
-        <p>~SERVICES~</p>
-        <h1>Loans Built Around How You Earn</h1>
+        <p>{content.label}</p>
+        <h1>{content.title}</h1>
       </div>
     </section>
   );
 }
 
 function FaqHero() {
+  const content = siteContent.faqPage.hero;
   return (
     <section className="services-hero" data-node-id="107:746">
-      <img className="services-hero-image faq-hero-image" src="/assets/faq-hero-advisor-office.webp" alt="A financial advisor seated at her desk ready to answer questions" fetchPriority="high" decoding="async" />
+      <img className="services-hero-image faq-hero-image" src={content.media.src} alt={content.media.alt} style={{ objectPosition: content.media.position }} fetchPriority="high" decoding="async" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content">
-        <p>~FAQs~</p>
-        <h1>Got Questions? We&apos;ve Got Answers.</h1>
+        <p>{content.label}</p>
+        <h1>{content.title}</h1>
       </div>
     </section>
   );
@@ -933,7 +1271,7 @@ function FaqSection() {
   return (
     <section className="faq-section" id="faqs" data-node-id="107:750">
       <div className="faq-list">
-        {faqItems.map(({ question, answer }) => (
+        {siteContent.faqPage.items.map(({ question, answer }) => (
           <details
             className="faq-item"
             key={question}
@@ -958,39 +1296,42 @@ function FaqSection() {
 }
 
 function AboutPageHero() {
+  const content = siteContent.aboutPage.hero;
   return (
     <section className="services-hero about-page-hero" data-node-id="142:1955">
-      <img className="services-hero-image about-hero-image" src="/assets/about-hero-woman-office.webp" alt="A confident business professional standing in a modern office" fetchPriority="high" decoding="async" />
+      <img className="services-hero-image about-hero-image" src={content.media.src} alt={content.media.alt} style={{ objectPosition: content.media.position }} fetchPriority="high" decoding="async" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content about-hero-content">
-        <p>~About Us~</p>
-        <h1>We&apos;re Here for the People Banks Overlook</h1>
+        <p>{content.label}</p>
+        <h1>{content.title}</h1>
       </div>
     </section>
   );
 }
 
 function ContactPageHero() {
+  const content = siteContent.contactPage.hero;
   return (
     <section className="services-hero contact-page-hero">
-      <img className="services-hero-image contact-hero-image" src="/assets/contact-hero-women-meeting.webp" alt="A business leader speaking with colleagues in a bright meeting room" fetchPriority="high" decoding="async" />
+      <img className="services-hero-image contact-hero-image" src={content.media.src} alt={content.media.alt} style={{ objectPosition: content.media.position }} fetchPriority="high" decoding="async" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content contact-hero-content">
-        <p>~Contact Us~</p>
-        <h1>Have a Question, Need Help Or Want To Know More, We&apos;re Here For You.</h1>
+        <p>{content.label}</p>
+        <h1>{content.title}</h1>
       </div>
     </section>
   );
 }
 
 function ApplicationPageHero() {
+  const content = siteContent.applicationPage.hero;
   return (
     <section className="services-hero application-page-hero">
-      <img className="services-hero-image application-hero-image" src="/assets/contact-hero-team-meeting.webp" alt="A group of business professionals discussing growth and funding" fetchPriority="high" decoding="async" />
+      <img className="services-hero-image application-hero-image" src={content.media.src} alt={content.media.alt} style={{ objectPosition: content.media.position }} fetchPriority="high" decoding="async" />
       <div className="services-hero-overlay" />
       <div className="services-hero-content contact-hero-content application-hero-content">
-        <p>~Application~</p>
-        <h1>Start Your Application Today</h1>
+        <p>{content.label}</p>
+        <h1>{content.title}</h1>
       </div>
     </section>
   );
@@ -999,63 +1340,54 @@ function ApplicationPageHero() {
 function AboutStatementSection() {
   return (
     <section className="about-statement-section" data-node-id="142:1959">
-      <p>
-        At IOU Finance, we are committed to putting fast, honest funding in the hands of employees, traders, and business owners across Nigeria. Our team understands the pressures of earning a salary, running a trade, and growing a business, so we offer simple loan options built around how you actually work and earn.
-      </p>
+      <p>{siteContent.aboutPage.statement}</p>
     </section>
   );
 }
 
 function AboutMissionSection() {
-  const values = [
-    'Trust (No hidden charges)',
-    'Speed (Same-day approval)',
-    'Dignity (Respect all customers)',
-    'Accessibility (no complicated forms)',
-  ];
+  const mission = siteContent.aboutPage.mission;
+  const values = siteContent.aboutPage.values;
 
   return (
     <section className="about-mission-section" data-node-id="148:2212">
       <div className="about-detail-row">
         <div className="about-mission-copy">
           <div className="about-mission-intro">
-            <p className="about-mission-label">OUR MISSION</p>
-            <h2>Turning Everyday Work Into Lasting Growth</h2>
-            <p>We exist to make credit accessible to every hardworking Nigerian, regardless of collateral, connections, or paperwork. Our vision is a Nigeria where no one&apos;s growth is limited by lack of access to capital.</p>
+            <p className="about-mission-label">{mission.label}</p>
+            <h2>{mission.title}</h2>
+            <p>{mission.description}</p>
           </div>
 
           <div className="about-mission-points">
-            <article>
-              <span className="about-point-icon"><img src="/assets/about-capital.svg" alt="" /></span>
-              <h3>Simplify Access to Capital</h3>
-              <p>No collateral, no complicated forms. Just simple requirements anyone can meet, and fast decisions that don&apos;t leave you waiting.</p>
-            </article>
-            <article>
-              <span className="about-point-icon"><img src="/assets/about-growth.svg" alt="" /></span>
-              <h3>Empower Growth</h3>
-              <p>We help employees stay financially steady and give traders and business owners the capital to keep moving forward, one loan at a time.</p>
-            </article>
+            {mission.points.map((point) => (
+              <article key={point.title}>
+                <span className="about-point-icon"><img src={point.icon.src} alt={point.icon.alt} /></span>
+                <h3>{point.title}</h3>
+                <p>{point.description}</p>
+              </article>
+            ))}
           </div>
         </div>
         <div className="about-media-placeholder about-mission-media">
-          <img src="/assets/about-our-mission.webp" alt="A team celebrating progress together" loading="lazy" decoding="async" />
+          <img src={mission.media.src} alt={mission.media.alt} style={{ objectPosition: mission.media.position }} loading="lazy" decoding="async" />
         </div>
       </div>
 
       <div className="about-detail-row about-values-row">
         <div className="about-media-placeholder about-values-media">
-          <img src="/assets/about-what-we-stand-for.webp" alt="A team reviewing their work together" loading="lazy" decoding="async" />
+          <img src={values.media.src} alt={values.media.alt} style={{ objectPosition: values.media.position }} loading="lazy" decoding="async" />
         </div>
         <div className="about-values-copy">
           <div>
-            <h2>What we stand for</h2>
-            <p>Everything we do is guided by a few simple beliefs, the same ones that shape how we lend, how we treat people, and how we build trust every single day.</p>
+            <h2>{values.title}</h2>
+            <p>{values.description}</p>
           </div>
 
           <div className="about-values-block">
-            <h3>Our Values</h3>
+            <h3>{values.heading}</h3>
             <div className="about-values-grid">
-              {values.map((value) => (
+              {values.items.map((value) => (
                 <div className="about-value-item" key={value}>
                   <img src="/assets/checkmark-circle.svg" alt="" />
                   <span>{value}</span>
@@ -1065,8 +1397,8 @@ function AboutMissionSection() {
           </div>
 
           <div className="about-values-actions">
-            <a className="button button-primary" href="/application">Apply for a Loan</a>
-            <a className="button button-dark-outline" href="/services">Explore our Services</a>
+            <a className="button button-primary" href="/application">{siteContent.global.buttons.apply}</a>
+            <a className="button button-dark-outline" href="/services">{siteContent.global.buttons.exploreServices}</a>
           </div>
         </div>
       </div>
@@ -1075,25 +1407,20 @@ function AboutMissionSection() {
 }
 
 function AboutTeamSection() {
-  const team = [
-    ['David Mitchell', 'Junior Plumbing Technician'],
-    ['Rachel Bennett', 'Junior Plumbing Technician'],
-    ["Kevin O'Brien", 'Associate Plumbing Technician'],
-    ['Laura Simmons', 'Associate Plumbing Technician'],
-  ];
+  const content = siteContent.aboutPage.team;
 
   return (
     <section className="about-team-section" data-node-id="148:2286">
       <div className="about-team-container">
         <div className="about-team-heading">
-          <p>OUR TEAM</p>
-          <h2>Meet The Team Making It Happen</h2>
+          <p>{content.label}</p>
+          <h2>{content.title}</h2>
         </div>
 
         <div className="about-team-grid">
-          {team.map(([name, role]) => (
+          {content.members.map(({ name, role, photo }) => (
             <article className="about-team-member" key={name}>
-              <div className="about-team-photo" aria-hidden="true" />
+              <div className="about-team-photo">{photo.src && <img src={photo.src} alt={photo.alt} style={{ objectPosition: photo.position }} loading="lazy" decoding="async" />}</div>
               <div className="about-team-meta">
                 <h3>{name}</h3>
                 <p>{role}</p>
@@ -1107,37 +1434,16 @@ function AboutTeamSection() {
 }
 
 function ContactSection() {
-  const contactCards = [
-    {
-      type: 'Email',
-      description: 'Get the latest updates and offers.',
-      value: 'contact@ioufinanceltd.com',
-      href: 'mailto:contact@ioufinanceltd.com',
-      icon: '/assets/contact-email.svg',
-    },
-    {
-      type: 'Office',
-      description: 'Visit or write to us at:',
-      value: '20 mojidi street, off toyin street ikeja, Lagos',
-      icon: '/assets/contact-office.svg',
-    },
-    {
-      type: 'Phone',
-      description: 'Speak to our team for support.',
-      value: '+234-702-5700-040',
-      href: 'tel:+2347025700040',
-      icon: '/assets/contact-phone.svg',
-    },
-  ];
+  const content = siteContent.contactPage;
 
   return (
     <section className="contact-section" data-node-id="155:2795">
       <div className="contact-section-container">
-        <h2>Get in touch with our team</h2>
+        <h2>{content.sectionTitle}</h2>
         <div className="contact-cards">
-          {contactCards.map(({ type, description, value, href, icon }) => (
+          {content.cards.map(({ type, description, value, href, icon }) => (
             <article className="contact-card" key={type}>
-              <span className="contact-card-icon"><img src={icon} alt="" /></span>
+              <span className="contact-card-icon"><img src={icon.src} alt={icon.alt} /></span>
               <div className="contact-card-content">
                 <div className="contact-card-copy">
                   <h3>{type}</h3>
@@ -1154,6 +1460,7 @@ function ContactSection() {
 }
 
 function ApplicationFormSection() {
+  const content = siteContent.applicationPage.form;
   const [fileName, setFileName] = useState('');
   const [fileError, setFileError] = useState('');
   const [utilityBillFileName, setUtilityBillFileName] = useState('');
@@ -1237,54 +1544,54 @@ function ApplicationFormSection() {
       <form className="application-form" onSubmit={handleSubmit} onInput={handleFormValidity} onChange={handleFormValidity}>
         <div className="application-form-row">
           <label className="application-field">
-            <span>First Name <b aria-hidden="true">*</b></span>
-            <input name="firstName" autoComplete="given-name" placeholder="eg. John" required />
+            <span>{content.firstNameLabel} <b aria-hidden="true">*</b></span>
+            <input name="firstName" autoComplete="given-name" placeholder={content.firstNamePlaceholder} required />
           </label>
           <label className="application-field">
-            <span>Last Name <b aria-hidden="true">*</b></span>
-            <input name="lastName" autoComplete="family-name" placeholder="eg. Doe" required />
-          </label>
-        </div>
-
-        <div className="application-form-row">
-          <label className="application-field">
-            <span>Phone Number <b aria-hidden="true">*</b></span>
-            <input name="phone" type="tel" autoComplete="tel" placeholder="+123-456-7890-123" required />
-          </label>
-          <label className="application-field">
-            <span>E-mail Address <b aria-hidden="true">*</b></span>
-            <input name="email" type="email" autoComplete="email" placeholder="name@email.com" required />
+            <span>{content.lastNameLabel} <b aria-hidden="true">*</b></span>
+            <input name="lastName" autoComplete="family-name" placeholder={content.lastNamePlaceholder} required />
           </label>
         </div>
 
         <div className="application-form-row">
           <label className="application-field">
-            <span>Business/Employer <b aria-hidden="true">*</b></span>
-            <input name="employer" autoComplete="organization" placeholder="eg. Your Company" required />
+            <span>{content.phoneLabel} <b aria-hidden="true">*</b></span>
+            <input name="phone" type="tel" autoComplete="tel" placeholder={content.phonePlaceholder} required />
           </label>
           <label className="application-field">
-            <span>Monthly income (₦) <b aria-hidden="true">*</b></span>
+            <span>{content.emailLabel} <b aria-hidden="true">*</b></span>
+            <input name="email" type="email" autoComplete="email" placeholder={content.emailPlaceholder} required />
+          </label>
+        </div>
+
+        <div className="application-form-row">
+          <label className="application-field">
+            <span>{content.employerLabel} <b aria-hidden="true">*</b></span>
+            <input name="employer" autoComplete="organization" placeholder={content.employerPlaceholder} required />
+          </label>
+          <label className="application-field">
+            <span>{content.incomeLabel} <b aria-hidden="true">*</b></span>
             <input name="monthlyIncome" inputMode="numeric" onInput={handleMoneyInput} required />
           </label>
         </div>
 
         <div className="application-form-row">
           <label className="application-field">
-            <span>Amount needed (₦) <b aria-hidden="true">*</b></span>
+            <span>{content.amountLabel} <b aria-hidden="true">*</b></span>
             <input name="amountNeeded" inputMode="numeric" defaultValue={formatMoneyInput(prefilledAmount)} onInput={handleMoneyInput} required />
           </label>
           <label className="application-field">
-            <span>Duration (months) <b aria-hidden="true">*</b></span>
+            <span>{content.durationLabel} <b aria-hidden="true">*</b></span>
             <input name="duration" type="number" inputMode="numeric" min="1" max="12" defaultValue={prefilledDuration} required />
           </label>
         </div>
 
         <label className="application-field application-address-field">
-          <span>Home Address <b aria-hidden="true">*</b></span>
+          <span>{content.addressLabel} <b aria-hidden="true">*</b></span>
           <textarea
             name="homeAddress"
             autoComplete="street-address"
-            placeholder="Enter your full residential address"
+            placeholder={content.addressPlaceholder}
             rows="3"
             required
           />
@@ -1292,17 +1599,17 @@ function ApplicationFormSection() {
 
         <div className="application-form-row application-identification-row">
           <label className="application-field">
-            <span>BVN (11 digits) <b aria-hidden="true">*</b></span>
+            <span>{content.bvnLabel} <b aria-hidden="true">*</b></span>
             <input name="bvn" inputMode="numeric" minLength="11" maxLength="11" required />
           </label>
           <label className="application-field">
-            <span>NIN <b aria-hidden="true">*</b></span>
+            <span>{content.ninLabel} <b aria-hidden="true">*</b></span>
             <input name="nin" inputMode="numeric" maxLength="11" required />
           </label>
         </div>
 
         <label className="application-upload-field">
-          <span className="application-upload-label">Passport Photograph <b aria-hidden="true">*</b></span>
+          <span className="application-upload-label">{content.passportLabel} <b aria-hidden="true">*</b></span>
           <span className="application-upload-box">
             <input
               name="passportPhotograph"
@@ -1312,17 +1619,17 @@ function ApplicationFormSection() {
               required
               onChange={handleFileChange}
             />
-            <img src="/assets/application-upload.svg" alt="" />
+            <img src={content.uploadIcon.src} alt={content.uploadIcon.alt} />
             <span className="application-upload-copy">
-              <strong>{fileName || 'Click to upload a Passport photograph'}</strong>
-              <small id="passport-upload-help"><span>JPG or PNG</span><i /><span>clear &amp; recent image</span><i /><span>Max 5MB</span></small>
+              <strong>{fileName || content.passportPrompt}</strong>
+              <small id="passport-upload-help">{content.passportHelp.split('|').map((item, index) => <span key={item.trim()}>{index > 0 && <i />}{item.trim()}</span>)}</small>
             </span>
           </span>
           {fileError && <span className="application-upload-error" id="passport-upload-error" role="alert">{fileError}</span>}
         </label>
 
         <label className="application-upload-field">
-          <span className="application-upload-label">Utility Bill <b aria-hidden="true">*</b></span>
+          <span className="application-upload-label">{content.utilityBillLabel} <b aria-hidden="true">*</b></span>
           <span className="application-upload-box">
             <input
               name="utilityBill"
@@ -1332,23 +1639,23 @@ function ApplicationFormSection() {
               required
               onChange={handleUtilityBillChange}
             />
-            <img src="/assets/application-upload.svg" alt="" />
+            <img src={content.uploadIcon.src} alt={content.uploadIcon.alt} />
             <span className="application-upload-copy">
-              <strong>{utilityBillFileName || 'Click to upload a recent utility bill'}</strong>
-              <small id="utility-bill-upload-help"><span>PDF, JPG or PNG</span><i /><span>proof of home address</span><i /><span>Max 5MB</span></small>
+              <strong>{utilityBillFileName || content.utilityPrompt}</strong>
+              <small id="utility-bill-upload-help">{content.utilityHelp.split('|').map((item, index) => <span key={item.trim()}>{index > 0 && <i />}{item.trim()}</span>)}</small>
             </span>
           </span>
           {utilityBillError && <span className="application-upload-error" id="utility-bill-upload-error" role="alert">{utilityBillError}</span>}
         </label>
 
         <p className="application-consent">
-          By clicking this button, you confirm that you have read and agree to our{' '}
-          <a href="/terms-and-conditions">Terms &amp; Conditions</a> and{' '}
-          <a href="/privacy-policy">Privacy Policy</a>
+          {content.consentPrefix}{' '}
+          <a href="/terms-and-conditions">{siteContent.global.footer.termsLabel}</a> and{' '}
+          <a href="/privacy-policy">{siteContent.global.footer.privacyLabel}</a>
         </p>
 
         <button className="button button-primary application-submit" type="submit" disabled={isSubmitting || !isFormComplete || Boolean(fileError) || Boolean(utilityBillError)}>
-          {isSubmitting ? 'Submitting…' : 'Apply for a Loan'}
+          {isSubmitting ? content.submittingLabel : content.submitLabel}
         </button>
         {submitStatus && (
           <p className="application-form-status" role="status">
@@ -1413,7 +1720,7 @@ function ServiceCard({ title, description, image, imagePosition, arrow = '/asset
           <p>{description}</p>
         </div>
         <span className="service-link">
-          <span>Learn More</span>
+          <span>{siteContent.global.buttons.learnMore}</span>
           <img src={arrow} alt="" />
         </span>
       </div>
@@ -1422,15 +1729,16 @@ function ServiceCard({ title, description, image, imagePosition, arrow = '/asset
 }
 
 function ServicesSection() {
+  const content = siteContent.home.services;
   return (
     <section className="services-section" id="services" data-node-id="32:19">
       <div className="services-container">
         <div className="services-heading">
           <div className="services-title">
-            <p className="section-label">OUR SERVICES</p>
-            <h2>Whatever You're Building, We Have a Loan for It.</h2>
+            <p className="section-label">{content.label}</p>
+            <h2>{content.title}</h2>
           </div>
-          <a className="button button-primary services-heading-cta" href="/services">Explore More Services</a>
+          <a className="button button-primary services-heading-cta" href="/services">{content.buttonLabel}</a>
         </div>
 
         <div className="services-grid">
@@ -1438,7 +1746,7 @@ function ServicesSection() {
         </div>
 
         <div className="services-actions">
-          <a className="button button-primary" href="/services">Explore More Services</a>
+          <a className="button button-primary" href="/services">{content.buttonLabel}</a>
         </div>
       </div>
     </section>
@@ -1462,6 +1770,8 @@ function ServicesCatalogSection() {
 }
 
 function BenefitsSection() {
+  const content = siteContent.home.benefits;
+  const contentBenefits = content.items;
   const listRef = useRef(null);
   const stickyMediaRef = useRef(null);
   const stickyImageRefs = useRef([]);
@@ -1480,10 +1790,10 @@ function BenefitsSection() {
 
       const listRect = list.getBoundingClientRect();
       const mediaRect = stickyMedia.getBoundingClientRect();
-      const cardHeight = list.scrollHeight / benefits.length;
+      const cardHeight = list.scrollHeight / contentBenefits.length;
       const mediaCenter = mediaRect.top + (mediaRect.height / 2);
       const rawProgress = ((mediaCenter - listRect.top) / cardHeight) - 0.5;
-      const progress = Math.max(0, Math.min(benefits.length - 1, rawProgress));
+      const progress = Math.max(0, Math.min(contentBenefits.length - 1, rawProgress));
       const reducedIndex = Math.round(progress);
 
       stickyImageRefs.current.forEach((image, index) => {
@@ -1517,19 +1827,19 @@ function BenefitsSection() {
     <section className="benefits-section" id="benefits" data-node-id="37:93">
       <div className="benefits-container">
         <div className="benefits-heading">
-          <p className="section-label">BENEFITS</p>
-          <h2>Reasons Why Businesses Trust IOU Finance</h2>
+          <p className="section-label">{content.label}</p>
+          <h2>{content.title}</h2>
         </div>
 
         <div className="benefits-content">
           <div className="benefits-list" ref={listRef}>
-            {benefits.map((benefit) => (
+            {contentBenefits.map((benefit) => (
               <article className="benefit-card" key={benefit.title}>
                 <img
                   className="benefit-media-mobile"
-                  src={benefit.image}
-                  alt={benefit.imageAlt}
-                  style={{ objectPosition: benefit.imagePosition }}
+                  src={benefit.media.src}
+                  alt={benefit.media.alt}
+                  style={{ objectPosition: benefit.media.position }}
                   loading="lazy"
                   decoding="async"
                 />
@@ -1542,12 +1852,12 @@ function BenefitsSection() {
           </div>
 
           <div className="benefit-sticky-media" aria-hidden="true" data-node-id="37:110" ref={stickyMediaRef}>
-            {benefits.map((benefit, index) => (
+            {contentBenefits.map((benefit, index) => (
               <img
                 className="benefit-sticky-image"
-                src={benefit.image}
+                src={benefit.media.src}
                 alt=""
-                style={{ objectPosition: benefit.imagePosition }}
+                style={{ objectPosition: benefit.media.position }}
                 loading="lazy"
                 decoding="async"
                 ref={(image) => { stickyImageRefs.current[index] = image; }}
@@ -1562,6 +1872,7 @@ function BenefitsSection() {
 }
 
 function StatsSection() {
+  const content = siteContent.home.stats;
   const sectionRef = useRef(null);
   const animationFrameRef = useRef(null);
   const [progress, setProgress] = useState(0);
@@ -1607,9 +1918,9 @@ function StatsSection() {
   };
 
   return (
-    <section className="stats-section" id="stats" aria-label="IOU Finance statistics" data-node-id="40:113" ref={sectionRef}>
+    <section className="stats-section" id="stats" aria-label={content.accessibleLabel} data-node-id="40:113" ref={sectionRef}>
       <div className="stats-container">
-        {stats.map((stat) => (
+        {content.items.map((stat) => (
           <div className="stat-item" key={stat.label}>
             <strong>
               <span className="sr-only">{formatStat(stat, 1)}</span>
@@ -1641,12 +1952,13 @@ function ProcessImage({ src, alt, position = 'center' }) {
 
 function ProcessSection() {
   const [activeStep, setActiveStep] = useState(0);
-  const step = applicationSteps[activeStep];
+  const content = siteContent.home.process;
+  const step = content.steps[activeStep];
 
   return (
     <section className="process-section" id="process" data-node-id="45:485">
       <div className="process-row step-row">
-        <ProcessImage src={step.image} alt={step.imageAlt} position={step.imagePosition} />
+        <ProcessImage src={step.media.src} alt={step.media.alt} position={step.media.position} />
 
         <div className="step-panel">
           <div className="step-copy" aria-live="polite">
@@ -1662,17 +1974,17 @@ function ProcessSection() {
               type="button"
               onClick={() => setActiveStep((current) => current - 1)}
               disabled={activeStep === 0}
-              aria-label="Previous application step"
+              aria-label={content.previousLabel}
             >
               <img src={activeStep === 0 ? '/assets/step-back-disabled.svg' : '/assets/step-back.svg'} alt="" />
             </button>
             <button
               type="button"
               onClick={() => setActiveStep((current) => current + 1)}
-              disabled={activeStep === applicationSteps.length - 1}
-              aria-label="Next application step"
+              disabled={activeStep === content.steps.length - 1}
+              aria-label={content.nextLabel}
             >
-              <img src={activeStep === applicationSteps.length - 1 ? '/assets/step-forward-disabled.svg' : '/assets/step-forward.svg'} alt="" />
+              <img src={activeStep === content.steps.length - 1 ? '/assets/step-forward-disabled.svg' : '/assets/step-forward.svg'} alt="" />
             </button>
           </div>
         </div>
@@ -1681,14 +1993,14 @@ function ProcessSection() {
       <div className="process-row eligibility-row">
         <div className="eligibility-content">
           <div className="eligibility-intro">
-            <h2>WHO CAN APPLY?</h2>
-            <p>Whether you earn a salary, trade for a living, or run a business, IOU Finance is built for you. We keep the process simple and the requirements few, so getting funded doesn&apos;t feel like a battle.</p>
+            <h2>{content.eligibility.title}</h2>
+            <p>{content.eligibility.description}</p>
           </div>
 
           <div className="documents-block">
-            <h3>Documents Needed</h3>
+            <h3>{content.eligibility.documentsHeading}</h3>
             <div className="documents-grid">
-              {requiredDocuments.map((document) => (
+              {content.eligibility.documents.map((document) => (
                 <div className="document-item" key={document}>
                   <img src="/assets/checkmark-circle.svg" alt="" />
                   <span>{document}</span>
@@ -1698,15 +2010,15 @@ function ProcessSection() {
           </div>
 
           <div className="eligibility-actions">
-            <a className="button button-primary" href="/application">Apply for a Loan</a>
-            <a className="button button-dark-outline" href="/services">Explore our Services</a>
+            <a className="button button-primary" href="/application">{siteContent.global.buttons.apply}</a>
+            <a className="button button-dark-outline" href="/services">{siteContent.global.buttons.exploreServices}</a>
           </div>
         </div>
 
         <ProcessImage
-          src="/assets/process-eligibility.webp"
-          alt="A small business owner who is eligible to apply"
-          position="48% 15%"
+          src={content.eligibility.media.src}
+          alt={content.eligibility.media.alt}
+          position={content.eligibility.media.position}
         />
       </div>
     </section>
@@ -1714,11 +2026,12 @@ function ProcessSection() {
 }
 
 function TestimonialsSection() {
+  const content = siteContent.home.testimonials;
   const viewportRef = useRef(null);
   const trackRef = useRef(null);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const visibleTestimonials = window.innerWidth >= 1350 ? 4 : window.innerWidth > 900 ? 3 : window.innerWidth > 600 ? 2 : 1;
-  const lastTestimonial = testimonials.length - visibleTestimonials;
+  const lastTestimonial = content.items.length - visibleTestimonials;
 
   useEffect(() => {
     const resetCarousel = () => {
@@ -1759,8 +2072,8 @@ function TestimonialsSection() {
       <div className="testimonials-container">
         <div className="testimonials-heading">
           <div className="testimonials-title">
-            <p className="section-label">TESTIMONIALS</p>
-            <h2>Hear From The Hustlers Who Trust Us Every Day</h2>
+            <p className="section-label">{content.label}</p>
+            <h2>{content.title}</h2>
           </div>
 
           <div className="testimonial-controls">
@@ -1768,7 +2081,7 @@ function TestimonialsSection() {
               type="button"
               onClick={() => moveCarousel(-1)}
               disabled={activeTestimonial === 0}
-              aria-label="Previous testimonials"
+              aria-label={content.previousLabel}
             >
               <img
                 className={activeTestimonial === 0 ? '' : 'arrow-reversed'}
@@ -1780,7 +2093,7 @@ function TestimonialsSection() {
               type="button"
               onClick={() => moveCarousel(1)}
               disabled={activeTestimonial === lastTestimonial}
-              aria-label="Next testimonials"
+              aria-label={content.nextLabel}
             >
               <img
                 className={activeTestimonial === lastTestimonial ? 'arrow-reversed' : ''}
@@ -1796,15 +2109,15 @@ function TestimonialsSection() {
           ref={viewportRef}
           onScroll={syncActiveTestimonial}
           tabIndex="0"
-          aria-label="Customer testimonials. Scroll horizontally to view more."
+          aria-label={content.viewportLabel}
         >
           <div
             className="testimonials-track"
             ref={trackRef}
           >
-            {testimonials.map((testimonial, index) => (
+            {content.items.map((testimonial, index) => (
               <article className={`testimonial-card ${index % 2 === 1 ? 'testimonial-card-dark' : ''}`} key={testimonial.name}>
-                <div className="testimonial-stars" aria-label="5 out of 5 stars">
+                <div className="testimonial-stars" role="img" aria-label="5 out of 5 stars">
                   {Array.from({ length: 5 }, (_, star) => (
                     <img src="/assets/testimonial-star.svg" alt="" key={star} />
                   ))}
@@ -1813,7 +2126,7 @@ function TestimonialsSection() {
                 <blockquote>{testimonial.quote}</blockquote>
 
                 <div className="testimonial-author">
-                  <img className="testimonial-avatar" src={testimonial.image} alt={testimonial.imageAlt} loading="lazy" decoding="async" />
+                  <img className="testimonial-avatar" src={testimonial.media.src} alt={testimonial.media.alt} style={{ objectPosition: testimonial.media.position }} loading="lazy" decoding="async" />
                   <div>
                     <cite>{testimonial.name}</cite>
                     <span>{testimonial.role}</span>
@@ -1829,10 +2142,11 @@ function TestimonialsSection() {
 }
 
 function FundingCtaSection({
-  title = 'Your Next Move Starts With Funding.',
-  description = 'No collateral, no long wait. Apply now and get cash in your account, same day.',
+  title = siteContent.home.cta.title,
+  description = siteContent.home.cta.description,
   primaryHref = '/application',
-  secondaryLabel = 'Explore our Services',
+  primaryLabel = siteContent.home.cta.primaryLabel,
+  secondaryLabel = siteContent.home.cta.secondaryLabel,
   secondaryHref = '/services',
   sectionId = 'apply',
   nodeId = '56:2013',
@@ -1872,7 +2186,7 @@ function FundingCtaSection({
         </div>
 
         <div className="funding-cta-actions">
-          <a className="button button-primary" href={primaryHref}>Apply for a Loan</a>
+          <a className="button button-primary" href={primaryHref}>{primaryLabel}</a>
           <a className="button button-dark-outline" href={secondaryHref}>{secondaryLabel}</a>
         </div>
       </div>
@@ -1881,62 +2195,64 @@ function FundingCtaSection({
 }
 
 function Footer() {
+  const content = siteContent.global.footer;
+  const footerLogo = siteContent.global.brand.footerLogo;
   return (
     <footer className="site-footer" id="contact" data-node-id="59:2131">
       <div className="footer-container">
         <div className="footer-main">
           <div className="footer-intro">
             <a className="footer-brand" href="/#home" aria-label="IOU Finance home">
-              <img src="/assets/footer-logo.png" alt="IOU Finance Ltd." loading="lazy" decoding="async" />
+              <img src={footerLogo.src} alt={footerLogo.alt} style={{ objectPosition: footerLogo.position }} decoding="async" />
             </a>
-            <p>IOU Finance gives employees, traders, and business owners fast access to loans — no collateral, no long wait. Spend. Save. Earn.</p>
+            <p>{content.description}</p>
           </div>
 
           <img className="footer-divider" src="/assets/footer-divider.svg" alt="" />
 
           <nav className="footer-navigation" aria-label="Footer navigation">
             <div className="footer-column">
-              <h2>Menu</h2>
+              <h2>{content.menuHeading}</h2>
               <div className="footer-links">
-                {navItems.map(([label, href]) => <a href={href} key={label}>{label}</a>)}
+                {siteContent.global.navigation.items.map(({ label, href }) => <a href={href} key={label}>{label}</a>)}
               </div>
             </div>
 
             <div className="footer-column">
-              <h2>Our Services</h2>
+              <h2>{content.servicesHeading}</h2>
               <div className="footer-links">
                 {servicesCatalog.slice(0, 5).map((service) => (
                   <a href={service.href} key={service.slug}>{service.title}</a>
                 ))}
                 <a className="footer-services-link" href="/services">
-                  <span>View All Services</span>
+                  <span>{content.servicesLink}</span>
                   <img src="/assets/footer-arrow.svg" alt="" />
                 </a>
               </div>
             </div>
 
             <div className="footer-column">
-              <h2>Security</h2>
+              <h2>{content.securityHeading}</h2>
               <div className="footer-links">
-                <a href="/terms-and-conditions">Terms &amp; Conditions</a>
-                <a href="/privacy-policy">Privacy Policy</a>
+                <a href="/terms-and-conditions">{content.termsLabel}</a>
+                <a href="/privacy-policy">{content.privacyLabel}</a>
               </div>
             </div>
 
             <div className="footer-column footer-contact-column">
-              <h2>Social</h2>
+              <h2>{content.socialHeading}</h2>
               <address className="footer-contact-list">
-                <a href="mailto:contact@ioufinanceltd.com">
+                <a href={`mailto:${content.email}`}>
                   <img src="/assets/footer-mail.svg" alt="" />
-                  <span>contact@ioufinanceltd.com</span>
+                  <span>{content.email}</span>
                 </a>
-                <a href="tel:+2347025700040">
+                <a href={`tel:${content.phoneHref}`}>
                   <img src="/assets/footer-call.svg" alt="" />
-                  <span>+234-702-5700-040</span>
+                  <span>{content.phoneDisplay}</span>
                 </a>
                 <div>
                   <img src="/assets/footer-location.svg" alt="" />
-                  <span>20 mojidi street, off toyin street ikeja, Lagos</span>
+                  <span>{content.address}</span>
                 </div>
               </address>
             </div>
@@ -1945,7 +2261,7 @@ function Footer() {
 
         <div className="footer-bottom">
           <img className="footer-divider" src="/assets/footer-divider.svg" alt="" />
-          <p>© 2026 IOU Finance. All rights reserved.</p>
+          <p>{content.copyright}</p>
         </div>
       </div>
     </footer>
@@ -1972,6 +2288,7 @@ function HomePage() {
 }
 
 function ServicesPage() {
+  const cta = siteContent.servicesPage.cta;
   return (
     <main className="services-page">
       <div className="services-page-shell">
@@ -1980,10 +2297,11 @@ function ServicesPage() {
       </div>
       <ServicesCatalogSection />
       <FundingCtaSection
-        title="Pick a Loan. Start Growing."
-        description="Whatever you need funding for, we've got an option that fits. Apply now and get a decision fast."
+        title={cta.title}
+        description={cta.description}
         primaryHref="/application"
-        secondaryLabel="Contact Us"
+        primaryLabel={cta.primaryLabel}
+        secondaryLabel={cta.secondaryLabel}
         secondaryHref="/contact"
         sectionId="services-cta"
         nodeId="100:585"
@@ -1995,6 +2313,7 @@ function ServicesPage() {
 }
 
 function FaqPage() {
+  const cta = siteContent.faqPage.cta;
   return (
     <main className="faq-page">
       <div className="faq-page-shell">
@@ -2003,10 +2322,11 @@ function FaqPage() {
       </div>
       <FaqSection />
       <FundingCtaSection
-        title="Ready to Get Funded?"
-        description="Apply in minutes or talk to someone who can guide you. We're here either way."
+        title={cta.title}
+        description={cta.description}
         primaryHref="/application"
-        secondaryLabel="Contact Us"
+        primaryLabel={cta.primaryLabel}
+        secondaryLabel={cta.secondaryLabel}
         secondaryHref="/contact"
         sectionId="faq-cta"
       />
@@ -2016,6 +2336,7 @@ function FaqPage() {
 }
 
 function AboutPage() {
+  const cta = siteContent.aboutPage.cta;
   return (
     <main className="about-page">
       <div className="about-page-shell">
@@ -2027,10 +2348,11 @@ function AboutPage() {
       <StatsSection />
       <AboutTeamSection />
       <FundingCtaSection
-        title="Join our Family and get funded today"
-        description="Apply today and see why thousands of traders and business owners trust IOU Finance."
+        title={cta.title}
+        description={cta.description}
         primaryHref="/application"
-        secondaryLabel="Explore our Services"
+        primaryLabel={cta.primaryLabel}
+        secondaryLabel={cta.secondaryLabel}
         secondaryHref="/services"
         sectionId="about-cta"
         variant="funding-cta-services"
@@ -2041,6 +2363,7 @@ function AboutPage() {
 }
 
 function ContactPage() {
+  const cta = siteContent.contactPage.cta;
   return (
     <main className="contact-page">
       <div className="contact-page-shell">
@@ -2049,9 +2372,11 @@ function ContactPage() {
       </div>
       <ContactSection />
       <FundingCtaSection
-        title="Ready to Get Funded?"
-        description="Skip the wait, apply for a loan now and let's get you sorted."
+        title={cta.title}
+        description={cta.description}
         primaryHref="/application"
+        primaryLabel={cta.primaryLabel}
+        secondaryLabel={cta.secondaryLabel}
         sectionId="contact-cta"
       />
       <Footer />
@@ -2073,17 +2398,18 @@ function ApplicationPage() {
 }
 
 function NotFoundPage() {
+  const content = siteContent.notFound;
   return (
     <main className="not-found-page">
       <NavBar />
       <section className="not-found-section" aria-labelledby="not-found-title">
         <div className="not-found-layout">
           <div className="not-found-copy">
-            <h1 id="not-found-title">This page took a wrong turn.</h1>
-            <p>The link may be outdated or the page may have moved. Your next move is still right here.</p>
+            <h1 id="not-found-title">{content.title}</h1>
+            <p>{content.description}</p>
             <div className="not-found-actions">
-              <a className="button button-primary" href="/#home">Back to homepage</a>
-              <a className="button button-dark-outline" href="/services">Browse loan options</a>
+              <a className="button button-primary" href="/#home">{content.primaryLabel}</a>
+              <a className="button button-dark-outline" href="/services">{content.secondaryLabel}</a>
             </div>
           </div>
 
@@ -2100,6 +2426,7 @@ function NotFoundPage() {
 }
 
 function ServiceDetailPage({ service }) {
+  const cta = siteContent.serviceDetail.cta;
   return (
     <main className="service-detail-page">
       <NavBar />
@@ -2113,10 +2440,11 @@ function ServiceDetailPage({ service }) {
       />
       <ProcessSection />
       <FundingCtaSection
-        title="Ready to Handle Your Emergency?"
-        description="Apply now and get funded the same day, no stress, no delays."
+        title={cta.title}
+        description={cta.description}
         primaryHref="/application"
-        secondaryLabel="Contact Us"
+        primaryLabel={cta.primaryLabel}
+        secondaryLabel={cta.secondaryLabel}
         secondaryHref="/contact"
         sectionId="service-detail-cta"
         variant="funding-cta-services"
@@ -2132,7 +2460,7 @@ function LegalContent({ title, sections, nodeId }) {
       <div className="legal-content-container">
         <header className="legal-heading">
           <h1>{title}</h1>
-          <p>Last updated: Jan 2025</p>
+          <p>{siteContent.legal.lastUpdated}</p>
         </header>
         <div className="legal-sections">
           {sections.map(({ title: sectionTitle, body, intro, items, outro }) => (
@@ -2242,6 +2570,7 @@ function AdminLogin({ configured, onAuthenticated, onRetry }) {
 }
 
 function AdminAccess() {
+  const isLocalCmsPreview = import.meta.env.DEV && new URLSearchParams(window.location.search).has('cms-preview');
   const [authState, setAuthState] = useState('checking');
   const [configured, setConfigured] = useState(true);
 
@@ -2259,8 +2588,10 @@ function AdminAccess() {
   };
 
   useEffect(() => {
+    if (isLocalCmsPreview) return undefined;
     checkSession();
-  }, []);
+    return undefined;
+  }, [isLocalCmsPreview]);
 
   const signOut = async () => {
     try {
@@ -2269,6 +2600,10 @@ function AdminAccess() {
       setAuthState('unauthenticated');
     }
   };
+
+  if (isLocalCmsPreview) {
+    return <AdminDashboard onSignOut={() => window.location.assign('/admin')} onSessionExpired={() => {}} />;
+  }
 
   if (authState === 'checking') {
     return (
@@ -2287,18 +2622,51 @@ function AdminAccess() {
 }
 
 function AdminDashboard({ onSignOut, onSessionExpired }) {
+  const initialContent = mergeSiteContent(window.__IOU_CMS__?.content);
+  const [workspace, setWorkspace] = useState('content');
+  const [contentDraft, setContentDraft] = useState(() => initialContent);
+  const [savedContent, setSavedContent] = useState(() => initialContent);
+  const [contentRevision, setContentRevision] = useState(() => window.__IOU_CMS__?.revision || null);
   const [serviceRecords, setServiceRecords] = useState(() => readServiceCmsRecords());
+  const [servicesRevision, setServicesRevision] = useState(() => window.__IOU_CMS__?.servicesRevision || null);
   const [selectedSlug, setSelectedSlug] = useState(() => readServiceCmsRecords()[0]?.slug || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [notice, setNotice] = useState('');
   const [uploadingField, setUploadingField] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isGeneratingDetails, setIsGeneratingDetails] = useState(false);
+  const [aiDetailsStatus, setAiDetailsStatus] = useState('AI drafts from the service name and summary. Nothing is published until you save.');
   const selectedService = serviceRecords.find((service) => service.slug === selectedSlug) || serviceRecords[0];
   const [draft, setDraft] = useState(selectedService || null);
+  const [draftFocusX = '50%', draftFocusY = '50%'] = String(draft?.imagePosition || '50% 50%').split(/\s+/);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadContent = async () => {
+      try {
+        const response = await fetch('/api/cms/content', { credentials: 'same-origin' });
+        const result = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          onSessionExpired();
+          return;
+        }
+        if (!response.ok || !result.content || cancelled) return;
+        const merged = mergeSiteContent(result.content);
+        setContentDraft(merged);
+        setSavedContent(merged);
+        setContentRevision(result.revision || null);
+      } catch {
+        if (!cancelled) setNotice('The latest CMS content could not be loaded. The bundled website content is shown instead.');
+      }
+    };
+    loadContent();
+    return () => { cancelled = true; };
+  }, [onSessionExpired]);
 
   useEffect(() => {
     setDraft(selectedService ? { ...selectedService } : null);
+    setAiDetailsStatus('AI drafts from the service name and summary. Nothing is published until you save.');
   }, [selectedSlug]);
 
   useEffect(() => {
@@ -2319,23 +2687,80 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
   const updateDraft = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
   const updateDraftImage = (value) => setDraft((current) => ({ ...current, cardImage: value, image: value }));
 
-  const persistRecords = async (nextRecords, message) => {
+  const saveContent = async () => {
     setIsSaving(true);
     try {
-      const response = await fetch('/api/cms/services', {
+      const response = await fetch('/api/cms/content', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ records: nextRecords }),
+        credentials: 'same-origin',
+        body: JSON.stringify({ content: contentDraft, baseRevision: contentRevision }),
       });
       const result = await response.json().catch(() => ({}));
       if (response.status === 401) {
         onSessionExpired();
         throw new Error('Your admin session expired. Please sign in again.');
       }
+      if (response.status === 409) throw new Error('Another administrator published changes first. Refresh the dashboard before trying again.');
+      if (!response.ok || !result.content) throw new Error(result.error || 'The website content could not be published.');
+      const merged = mergeSiteContent(result.content);
+      setContentDraft(merged);
+      setSavedContent(merged);
+      setContentRevision(result.revision || null);
+      setNotice('Website content published globally. Open or refresh the website to verify it.');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'The website content could not be published.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const uploadContentImage = async (file, fieldPath) => {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setNotice('Use a JPG, PNG, or WebP image no larger than 5MB.');
+      return null;
+    }
+    setUploadingField(fieldPath);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const response = await fetch('/api/cms/images', { method: 'POST', body: formData, credentials: 'same-origin' });
+      const result = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        onSessionExpired();
+        throw new Error('Your admin session expired. Please sign in again.');
+      }
+      if (!response.ok || !result.url) throw new Error(result.error || 'The image could not be uploaded.');
+      setNotice('Image uploaded. Publish the content changes when you are ready.');
+      return result.url;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'The image could not be uploaded.');
+      return null;
+    } finally {
+      setUploadingField('');
+    }
+  };
+
+  const persistRecords = async (nextRecords, message) => {
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/cms/services', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ records: nextRecords, baseRevision: servicesRevision }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        onSessionExpired();
+        throw new Error('Your admin session expired. Please sign in again.');
+      }
+      if (response.status === 409) throw new Error('Another administrator published service changes first. Refresh the dashboard before trying again.');
       if (!response.ok || !Array.isArray(result.records)) {
         throw new Error(result.error || 'The service content could not be saved.');
       }
       const savedRecords = saveServiceCmsRecords(result.records);
+      setServicesRevision(result.revision || null);
       setServiceRecords(savedRecords);
       setNotice(message);
       return savedRecords;
@@ -2436,6 +2861,41 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
     await persistRecords(nextRecords, 'Service order updated.');
   };
 
+  const generateServiceDetails = async () => {
+    if (!draft?.title?.trim()) {
+      setAiDetailsStatus('Add a service name before generating its copy.');
+      return;
+    }
+    setIsGeneratingDetails(true);
+    setAiDetailsStatus('Generating the summary, overview paragraphs, and benefit items from the service name…');
+    try {
+      const response = await fetch('/api/admin/ai/service-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          service: {
+            title: draft.title,
+          },
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        onSessionExpired();
+        throw new Error('Your admin session expired. Please sign in again.');
+      }
+      if (!response.ok || !result.details) {
+        throw new Error(result.error || 'AI could not generate the service details.');
+      }
+      setDraft((current) => ({ ...current, ...result.details }));
+      setAiDetailsStatus('Service copy generated. The overview and benefits headings were left unchanged.');
+    } catch (error) {
+      setAiDetailsStatus(error instanceof Error ? error.message : 'AI could not generate the service details.');
+    } finally {
+      setIsGeneratingDetails(false);
+    }
+  };
+
   const uploadImage = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -2480,21 +2940,23 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
     <main className="admin-page">
       <aside className="admin-sidebar">
         <a className="admin-brand" href="/#home" aria-label="IOU Finance website">
-          <img src="/assets/logo-raw-2.png" alt="IOU Finance Ltd." />
+          <strong>IOU Finance</strong>
+          <span>Content management</span>
         </a>
         <nav className="admin-nav" aria-label="Admin navigation">
-          <a className="admin-nav-item admin-nav-item-active" href="/admin">
-            <span className="admin-nav-mark" aria-hidden="true" />
+          <button className={`admin-nav-item${workspace === 'content' ? ' admin-nav-item-active' : ''}`} type="button" onClick={() => setWorkspace('content')}>
+            Website content
+          </button>
+          <button className={`admin-nav-item${workspace === 'services' ? ' admin-nav-item-active' : ''}`} type="button" onClick={() => setWorkspace('services')}>
             Services
-          </a>
-          <a className="admin-nav-item" href="/#home">
-            <span className="admin-nav-mark" aria-hidden="true" />
+          </button>
+          <a className="admin-nav-item" href="/#home" target="_blank" rel="noreferrer">
             View website
           </a>
         </nav>
         <div className="admin-sidebar-footer">
           <span>Cloud workspace</span>
-          <p>Service content and uploaded images are stored securely in Cloudflare KV.</p>
+          <p>Website content and uploaded images are stored securely in Cloudflare KV for every authorised device.</p>
         </div>
       </aside>
 
@@ -2502,23 +2964,33 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
         <header className="admin-topbar">
           <div>
             <span className="admin-overline">IOU Finance CMS</span>
-            <h1>Services</h1>
+            <h1>{workspace === 'content' ? 'Website content' : 'Services'}</h1>
           </div>
           <div className="admin-topbar-actions">
-            <a className="admin-button admin-button-secondary" href="/services" target="_blank" rel="noreferrer">Preview website</a>
+            <a className="admin-button admin-button-secondary" href={workspace === 'content' ? '/#home' : '/services'} target="_blank" rel="noreferrer">Preview website</a>
             <button className="admin-button admin-button-secondary" type="button" onClick={onSignOut}>Sign out</button>
-            <button className="admin-button admin-button-primary" type="button" onClick={addService} disabled={isSaving}>Add service</button>
+            {workspace === 'services' && <button className="admin-button admin-button-primary" type="button" onClick={addService} disabled={isSaving}>Add service</button>}
           </div>
         </header>
 
-        <div className="admin-metrics" aria-label="Service content summary">
+        {workspace === 'services' && <div className="admin-metrics" aria-label="Service content summary">
           <div><strong>{serviceRecords.length}</strong><span>Total services</span></div>
           <div><strong>{publishedCount}</strong><span>Published</span></div>
           <div><strong>{draftCount}</strong><span>Drafts</span></div>
           <div><strong>KV</strong><span>Storage mode</span></div>
-        </div>
+        </div>}
 
-        <div className="admin-content-grid">
+        {workspace === 'content' ? (
+          <AdminContentEditor
+            content={contentDraft}
+            savedContent={savedContent}
+            onChange={setContentDraft}
+            onSave={saveContent}
+            onUpload={uploadContentImage}
+            uploadingPath={uploadingField}
+            isSaving={isSaving}
+          />
+        ) : <div className="admin-content-grid">
           <section className="admin-service-list" aria-label="Services list">
             <div className="admin-panel-heading">
               <div>
@@ -2602,10 +3074,26 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
                       {draft.cardImage && <button className="admin-text-button" type="button" onClick={() => updateDraftImage(null)}>Remove image</button>}
                     </div>
                   </div>
+                  <div className="admin-focal-grid admin-service-focal-grid">
+                    <label>
+                      <span>Horizontal focal point <b>{Number.parseInt(draftFocusX, 10) || 50}%</b></span>
+                      <input type="range" min="0" max="100" value={Number.parseInt(draftFocusX, 10) || 50} onChange={(event) => updateDraft('imagePosition', `${event.target.value}% ${draftFocusY}`)} />
+                    </label>
+                    <label>
+                      <span>Vertical focal point <b>{Number.parseInt(draftFocusY, 10) || 50}%</b></span>
+                      <input type="range" min="0" max="100" value={Number.parseInt(draftFocusY, 10) || 50} onChange={(event) => updateDraft('imagePosition', `${draftFocusX} ${event.target.value}%`)} />
+                    </label>
+                  </div>
                 </div>
 
                 <div className="admin-form-section">
-                  <div className="admin-form-section-heading"><h3>Service details</h3><p>Controls the first three dynamic sections of the service page.</p></div>
+                  <div className="admin-form-section-heading admin-form-section-heading-actions">
+                    <div><h3>Service details</h3><p>Generate the summary, overview paragraphs, and benefit items. Your headings remain unchanged.</p></div>
+                    <button className="admin-button admin-button-secondary admin-ai-generate-button" type="button" onClick={generateServiceDetails} disabled={isGeneratingDetails || isSaving} aria-busy={isGeneratingDetails}>
+                      {isGeneratingDetails ? 'Generating service copy…' : 'Generate service copy with AI'}
+                    </button>
+                  </div>
+                  <p className="admin-ai-status" role="status" aria-live="polite">{aiDetailsStatus}</p>
                   <label className="admin-field-full"><span>Overview heading</span><input required value={draft.overviewTitle} onChange={(event) => updateDraft('overviewTitle', event.target.value)} /></label>
                   <label className="admin-field-full"><span>Overview paragraphs</span><textarea rows="6" value={draft.overview.join('\n\n')} onChange={(event) => updateDraft('overview', event.target.value.split(/\n\s*\n/))} /><small>Separate paragraphs with a blank line.</small></label>
                   <label className="admin-field-full"><span>Benefits heading</span><input required value={draft.benefitsTitle} onChange={(event) => updateDraft('benefitsTitle', event.target.value)} /></label>
@@ -2632,7 +3120,7 @@ function AdminDashboard({ onSignOut, onSessionExpired }) {
               <div className="admin-empty-editor"><h2>Create your first service</h2><p>Add a service to begin managing its website content.</p><button className="admin-button admin-button-primary" type="button" onClick={addService}>Add service</button></div>
             )}
           </section>
-        </div>
+        </div>}
       </section>
 
       {notice && <div className="admin-notice" role="status">{notice}</div>}
@@ -2653,10 +3141,10 @@ export default function App() {
   else if (pagePath === '/contact') page = <ContactPage />;
   else if (pagePath === '/application' || pagePath === '/apply') page = <ApplicationPage />;
   if (pagePath === '/terms-and-conditions' || pagePath === '/terms') {
-    page = <LegalPage title="Terms of use" sections={termsSections} nodeId="170:3766" />;
+    page = <LegalPage title={siteContent.legal.terms.title} sections={siteContent.legal.terms.sections} nodeId="170:3766" />;
   }
   else if (pagePath === '/privacy-policy' || pagePath === '/privacy') {
-    page = <LegalPage title="Privacy Policy" sections={privacySections} nodeId="175:592" />;
+    page = <LegalPage title={siteContent.legal.privacy.title} sections={siteContent.legal.privacy.sections} nodeId="175:592" />;
   }
   else if (pagePath === '/') page = <HomePage />;
   else if (!page) page = <NotFoundPage />;
@@ -2664,6 +3152,7 @@ export default function App() {
   return (
     <>
       <SiteMetadata pagePath={pagePath} service={serviceDetail} />
+      <DeferredImageWarmup disabled={pagePath === '/admin'} />
       {page}
     </>
   );

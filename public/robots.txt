@@ -3,4 +3,3 @@ Allow: /
 Disallow: /admin
 
 Sitemap: https://ioufinanceltd.com/sitemap.xml
-Agentmap: https://ioufinanceltd.com/.well-known/ard.json

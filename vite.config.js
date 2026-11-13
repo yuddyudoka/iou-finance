@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -258,7 +258,7 @@ function applicationApiPlugin(env) {
           from: `IOU Finance Applications <${env.RESEND_FROM_EMAIL}>`,
           to: [env.APPLICATION_RECIPIENT_EMAIL],
           reply_to: values.email,
-          subject: `Loan application — ${values.firstName} ${values.lastName}`,
+          subject: `Loan application: ${values.firstName} ${values.lastName}`,
           html: applicationEmailHtml(values),
           attachments: [
             { filename: passport.name || 'passport-photograph.jpg', content: passportContent },
@@ -351,10 +351,121 @@ function cmsImageUploadPlugin(env) {
   };
 }
 
+function localCmsStoragePlugin(env) {
+  const cmsDirectory = join(process.cwd(), '.cms');
+  const contentPath = join(cmsDirectory, 'content.json');
+  const servicesPath = join(cmsDirectory, 'services.json');
+
+  const readStoredJson = async (path, fallback = null) => {
+    try {
+      return JSON.parse(await readFile(path, 'utf8'));
+    } catch {
+      return fallback;
+    }
+  };
+
+  const writeStoredJson = async (path, value) => {
+    await mkdir(cmsDirectory, { recursive: true });
+    await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  };
+
+  const handleRequest = async (request, response, next) => {
+    const requestPath = request.url?.split('?')[0];
+    if (!['/api/cms/content', '/api/cms/services'].includes(requestPath)) return next();
+
+    if (request.method === 'GET') {
+      if (requestPath === '/api/cms/content') {
+        const record = await readStoredJson(contentPath, null);
+        return sendJson(response, 200, {
+          content: record?.content || null,
+          revision: record?.revision || null,
+          updatedAt: record?.updatedAt || null,
+        });
+      }
+      const stored = await readStoredJson(servicesPath, null);
+      const records = Array.isArray(stored) ? stored : stored?.records;
+      return sendJson(response, 200, {
+        records: Array.isArray(records) ? records : null,
+        revision: Array.isArray(stored) ? null : stored?.revision || null,
+        updatedAt: Array.isArray(stored) ? null : stored?.updatedAt || null,
+      });
+    }
+
+    if (request.method !== 'PUT') return sendJson(response, 405, { error: 'Method not allowed.' });
+    const sessionSecret = String(env.ADMIN_SESSION_SECRET || env.ADMIN_PASSWORD || '');
+    if (!hasValidAdminSession(request, sessionSecret)) {
+      return sendJson(response, 401, { error: 'Your admin session has expired. Please sign in again.' });
+    }
+
+    try {
+      const body = await readJsonBody(request, 1024 * 1024);
+      if (requestPath === '/api/cms/services') {
+        if (!Array.isArray(body.records)) return sendJson(response, 400, { error: 'The service content is invalid.' });
+        const current = await readStoredJson(servicesPath, null);
+        if (!Array.isArray(current) && current?.revision && body.baseRevision !== current.revision) {
+          return sendJson(response, 409, { error: 'The service content was changed by another administrator.', revision: current.revision });
+        }
+        const record = {
+          records: body.records,
+          revision: randomUUID(),
+          updatedAt: new Date().toISOString(),
+        };
+        await writeStoredJson(servicesPath, record);
+        return sendJson(response, 200, record);
+      }
+
+      if (!body.content || typeof body.content !== 'object' || Array.isArray(body.content)) {
+        return sendJson(response, 400, { error: 'The website content is invalid.' });
+      }
+      const current = await readStoredJson(contentPath, null);
+      if (current?.revision && body.baseRevision !== current.revision) {
+        return sendJson(response, 409, { error: 'The website content was changed by another administrator.', revision: current.revision });
+      }
+      const record = {
+        content: body.content,
+        revision: randomUUID(),
+        updatedAt: new Date().toISOString(),
+      };
+      await writeStoredJson(contentPath, record);
+      return sendJson(response, 200, record);
+    } catch (error) {
+      console.error('Local CMS save failed:', error instanceof Error ? error.message : error);
+      const isPayloadTooLarge = error?.message === 'PAYLOAD_TOO_LARGE' || error?.message === 'Request body is too large.';
+      return sendJson(response, isPayloadTooLarge ? 413 : 500, { error: 'The CMS content could not be saved.' });
+    }
+  };
+
+  return {
+    name: 'iou-local-cms-storage',
+    configureServer(server) {
+      server.middlewares.use(handleRequest);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(handleRequest);
+    },
+    async transformIndexHtml(html) {
+      const [contentRecord, servicesRecord] = await Promise.all([
+        readStoredJson(contentPath, null),
+        readStoredJson(servicesPath, null),
+      ]);
+      const services = Array.isArray(servicesRecord) ? servicesRecord : servicesRecord?.records;
+      if (!contentRecord?.content && !Array.isArray(services)) return html;
+      const payload = JSON.stringify({
+        content: contentRecord?.content || null,
+        revision: contentRecord?.revision || null,
+        updatedAt: contentRecord?.updatedAt || null,
+        services: Array.isArray(services) ? services : null,
+        servicesRevision: Array.isArray(servicesRecord) ? null : servicesRecord?.revision || null,
+      }).replaceAll('<', '\\u003c');
+      return html.replace('window.__IOU_CMS__ = null;', `window.__IOU_CMS__ = ${payload};`);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
     cacheDir: '.vite-cache',
-    plugins: [applicationApiPlugin(env), adminAuthPlugin(env), cmsImageUploadPlugin(env), react()],
+    plugins: [applicationApiPlugin(env), adminAuthPlugin(env), localCmsStoragePlugin(env), cmsImageUploadPlugin(env), react()],
   };
 });

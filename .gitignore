@@ -3,6 +3,8 @@ dist/
 .pnpm-store/
 .wrangler/
 .vite-cache/
+.cms/
+artifacts/
 .env
 .env.local
 .env.*.local
